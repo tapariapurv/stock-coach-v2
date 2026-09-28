@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chip · Stocks for Kids</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+/* Chip design system: indigo brand, caramel mascot, mint = correct, coral = wrong, gold = coins/progress */
+:root{--pri:#5B4CF5;--pri-d:#4031D4;--pri2:#8B5CF6;--pri-l:#EFEDFF;--pri-b:#C9C2FF;
+ --ok:#10B981;--ok-d:#0A9467;--ok-l:#DCF8EC;--bad:#FF5470;--bad-d:#DE3355;--bad-l:#FFE6EB;
+ --gold:#FFB31A;--gold-d:#E09405;--gold-l:#FFF5DC;--fire:#FF7A1A;--fire-d:#D95F08;--sky:#1FA2FF;--sky-d:#0B84DB;
+ --ink:#27253A;--ink2:#6B6883;--mute:#A8A5BD;--line:#ECE9F5;--soft:#F6F4FC;--bg:#FBFAFF;--card:#fff;
+ --r:20px;--sh:0 10px 30px -12px rgba(39,37,58,.18);--hf:Fredoka,Nunito,system-ui,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:Nunito,system-ui,sans-serif;color:var(--ink);background:var(--bg);font-weight:700;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+h1,h2,h3,.brand,.logo{font-family:var(--hf);font-weight:600;letter-spacing:-.2px}
+:focus-visible{outline:3px solid var(--pri-b);outline-offset:2px}
+/* buttons: chunky, sentence case, glossy top */
+.btn{--c:var(--pri);--d:var(--pri-d);display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:150px;padding:14px 22px;border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 60%),var(--c);color:#fff;box-shadow:0 5px 0 var(--d);font-family:var(--hf);font-weight:600;font-size:18px;transition:filter .15s,transform .08s}
+.btn:hover{filter:brightness(1.06)}
+.btn:active{transform:translateY(5px);box-shadow:none}
+.btn:disabled{--c:var(--line);--d:#DDD9EA;color:var(--mute);cursor:default;filter:none;transform:none;background:var(--c)}
+.btn.ok{--c:var(--ok);--d:var(--ok-d)}.btn.red{--c:var(--bad);--d:var(--bad-d)}.btn.gold{--c:var(--gold);--d:var(--gold-d)}.btn.sky{--c:var(--sky);--d:var(--sky-d)}
+.btn.ghost{background:var(--card);color:var(--pri);border:2px solid var(--line);box-shadow:0 4px 0 var(--line)}
+.btn.ghost:active{box-shadow:none}
+.btn.wide{width:100%}
+.btn[disabled]{--c:var(--line);--d:#DDD9EA;background:var(--c);color:var(--mute);cursor:default;filter:none;transform:none}
+.ci{width:1.15em;height:1.15em;vertical-align:-.2em;flex:none}
+.card{background:var(--card);border:2px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh)}
+.card h3{font-size:19px}
+/* shell */
+.shell{display:grid;grid-template-columns:230px minmax(0,600px) 330px;justify-content:center;gap:40px;min-height:100vh}
+.nav{position:sticky;top:0;height:100vh;border-right:2px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:6px;background:var(--card)}
+.logo{display:flex;align-items:center;gap:8px;font-size:32px;color:var(--pri);padding:0 10px 18px}
+.nav button{display:flex;align-items:center;gap:16px;padding:10px 14px;border-radius:16px;font-family:var(--hf);font-weight:500;font-size:18px;color:var(--ink2);transition:background .15s}
+.nav button span{font-size:26px;width:32px;text-align:center}
+.nav button:hover{background:var(--soft)}
+.nav button.on{background:var(--pri-l);color:var(--pri)}
+.side{padding:22px 0;display:flex;flex-direction:column;gap:20px;position:sticky;top:0;height:100vh}
+main{padding-bottom:40px;min-width:0}
+.top{position:sticky;top:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:14px 0;gap:8px}
+.stat{font-size:17px;font-weight:900;display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:99px;background:var(--card);border:2px solid var(--line)}
+.fire{color:var(--fire)}.fire.off{filter:grayscale(1);color:var(--mute)}.coin{color:var(--gold-d)}.heart{color:var(--bad)}.crs{color:var(--pri)}
+@media(max-width:1120px){
+ .shell{grid-template-columns:minmax(0,600px);gap:0}
+ .side,.logo{display:none}
+ .nav{position:fixed;inset:auto 0 0 0;height:auto;flex-direction:row;justify-content:space-around;border-right:0;border-top:2px solid var(--line);z-index:30;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+ .nav button{flex-direction:column;gap:2px;padding:6px 14px;font-size:12px}.nav button span{font-size:24px}
+ main{padding:0 16px 100px}
+}
+@media(max-width:600px){.sin .btn,.lfoot .btn{width:100%}.q{font-size:23px}.bubble{font-size:17px}}
+@media(max-width:420px){.stat{padding:6px 9px;font-size:15px}.crs{display:none}}
+/* path */
+.unit{margin-top:14px}
+.banner{position:sticky;top:70px;z-index:10;background:linear-gradient(120deg,var(--c),var(--c2));color:#fff;border-radius:24px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;overflow:hidden;box-shadow:0 12px 26px -14px var(--c)}
+.banner small{opacity:.85;font-weight:900;letter-spacing:1.2px;font-size:12px}
+.banner h2{font-size:24px;margin:2px 0 2px}.banner p{opacity:.92;font-size:15px}
+.bprog{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;font-weight:900}
+.bprog i{display:block;width:120px;height:8px;border-radius:99px;background:rgba(255,255,255,.28);overflow:hidden}
+.bprog i b{display:block;height:100%;background:#fff;border-radius:99px}
+.bicon{font-size:64px;line-height:1;transform:rotate(-8deg);filter:drop-shadow(0 6px 10px rgba(0,0,0,.18));margin-right:-6px}
+.path{display:flex;flex-direction:column;align-items:center;gap:26px;padding:50px 0 70px;position:relative}
+.trail{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.row{transform:translateX(var(--x));position:relative;display:flex;justify-content:center;z-index:1}
+/* level tiles: rounded "coins" with a rim, not circles */
+.node{position:relative;width:76px;height:72px;border-radius:26px;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 55%),var(--c);box-shadow:0 7px 0 var(--d),0 14px 20px -10px var(--d);display:grid;place-items:center;color:#fff;transition:filter .15s}
+.node::after{content:"";position:absolute;inset:6px;border-radius:20px;border:2.5px solid rgba(255,255,255,.35);pointer-events:none}
+.node:hover{filter:brightness(1.07)}
+.node:active{transform:translateY(6px);box-shadow:0 1px 0 var(--d)}
+.node.lock{--c:#E4E1EE;--d:#C9C5D9;color:#B3AFC6;box-shadow:0 7px 0 var(--d)}
+.node.lock::after{border-color:rgba(255,255,255,.6)}
+.node.done{--c:var(--gold);--d:var(--gold-d)}
+.node.jump{--c:#E4E1EE;--d:#C9C5D9;box-shadow:0 7px 0 var(--d),0 0 0 4px var(--gold-l)}
+.node.cur::before{content:"";position:absolute;inset:-12px -12px -19px;border-radius:34px;border:4px solid var(--c);opacity:.25;z-index:-1}
+.node svg{width:34px;height:34px}
+.node .tro{font-size:34px}
+.start{position:absolute;bottom:calc(100% + 18px);left:50%;translate:-50% 0;background:var(--card);border:2px solid var(--line);color:var(--c);padding:8px 14px;border-radius:14px;font-family:var(--hf);font-weight:600;font-size:16px;white-space:nowrap;z-index:2;box-shadow:var(--sh)}
+.start::after{content:"";position:absolute;left:50%;bottom:-8px;width:12px;height:12px;background:var(--card);border:2px solid var(--line);border-width:0 2px 2px 0;transform:translateX(-50%) rotate(45deg)}
+.start.gold{color:var(--gold-d)}
+.row:has(.start){margin-top:34px}
+.pmascot{position:absolute;top:130px;z-index:1}
+.pop{position:absolute;top:calc(100% + 22px);left:50%;translate:-50% 0;width:290px;background:var(--c);color:#fff;border-radius:22px;padding:18px;z-index:15;box-shadow:0 18px 40px -12px rgba(39,37,58,.4)}
+.pop::before{content:"";position:absolute;top:-8px;left:50%;width:16px;height:16px;background:inherit;transform:translateX(-50%) rotate(45deg);border-radius:3px}
+.pop h3{font-size:20px}.pop p{opacity:.92;margin:4px 0 14px}
+.pop .btn{width:100%;background:#fff;color:var(--c);box-shadow:0 5px 0 rgba(0,0,0,.18)}
+.pop.lock{background:var(--card);color:var(--ink2);border:2px solid var(--line)}
+.pop.lock .btn{background:var(--soft);color:var(--mute);box-shadow:none}
+.pop.jump{--c:var(--gold-d)}
+/* cards & pages */
+.goal{display:flex;align-items:center;gap:12px;margin-top:12px}
+.goal>span{font-size:30px}
+.gbar{flex:1;height:20px;background:var(--line);border-radius:99px;position:relative;overflow:hidden}
+.gbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--gold),#FFCB57);border-radius:99px}
+.gbar em{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-style:normal;color:#8A5A00}
+.skill{display:flex;align-items:center;gap:12px;padding:8px 0}
+.skill b{flex:1;font-size:15px}
+.sbar{width:110px;height:12px;background:var(--line);border-radius:99px;overflow:hidden}
+.sbar i{display:block;height:100%;border-radius:99px}
+.muted{color:var(--ink2);font-weight:600}
+.mob{display:none}@media(max-width:1120px){.mob{display:block}}
+.pagehead{display:flex;gap:18px;align-items:center;padding:8px 0 10px}
+.pagehead h1{font-size:30px}
+.sec{font-size:22px;margin:30px 0 12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sc2{display:flex;gap:12px;align-items:center;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:12px 16px}
+.sc2 span{font-size:26px}.sc2 b{display:block;font-size:20px;font-family:var(--hf);font-weight:600}.sc2 small{color:var(--ink2)}
+.list{background:var(--card);border:2px solid var(--line);border-radius:var(--r);padding:0 18px}
+.list>div{border-bottom:2px solid var(--line)}.list>div:last-child{border-bottom:0}
+.ach{display:flex;gap:14px;align-items:center;padding:14px 0}
+.ach .ae{width:60px;height:60px;border-radius:20px;display:grid;place-items:center;font-size:30px;background:var(--gold);box-shadow:0 4px 0 var(--gold-d);flex:none}
+.ach.no .ae{background:var(--line);box-shadow:0 4px 0 #DDD9EA;filter:grayscale(1)}
+.ach div{flex:1}.ach .sbar{width:100%;margin-top:6px;height:12px}
+.shopitem{display:flex;gap:14px;align-items:center;padding:16px 0}
+.shopitem .ae{font-size:36px;width:60px;height:60px;border-radius:20px;background:var(--soft);display:grid;place-items:center;flex:none}
+.shopitem div{flex:1}.shopitem .btn{min-width:118px;font-size:16px;padding:12px 16px}
+.hero{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,var(--pri-l),#FFF1E4);border-radius:24px;padding:18px;margin:6px 0 12px}
+.hero h2{font-size:22px}
+.fincard{display:flex;align-items:center;gap:16px;margin:10px 0 30px}
+.toggle{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0}
+.toggle .btn{min-width:110px;font-size:16px;padding:10px 16px}
+/* lesson */
+.lesson{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column}
+.lesson[hidden]{display:none}
+.lhead{width:100%;max-width:1000px;margin:0 auto;display:flex;align-items:center;gap:18px;padding:24px 20px 10px}
+.x{font-size:28px;color:var(--mute);line-height:1;width:36px;height:36px;border-radius:12px}
+.x:hover{background:var(--soft);color:var(--ink2)}
+.bar{flex:1;height:16px;background:var(--line);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--pri),var(--pri2));border-radius:99px;position:relative}
+.bar i::after{content:"";position:absolute;top:4px;left:8px;right:8px;height:4px;background:rgba(255,255,255,.3);border-radius:99px}
+.lhearts{color:var(--bad);font-weight:900;font-size:18px}
+.stage{flex:1;overflow-y:auto;width:100%;max-width:620px;margin:0 auto;padding:18px 20px 30px}
+.q{font-size:26px;margin:6px 0 18px;line-height:1.2}.q.c{text-align:center}
+.tagline{font-weight:900;color:var(--pri2);letter-spacing:1px;text-transform:uppercase;font-size:13px}
+.tagline.bad{color:var(--fire)}
+.talk{display:flex;align-items:flex-end;gap:6px;margin:4px 0 22px}
+.bubble{position:relative;background:var(--card);border:2px solid var(--line);border-radius:20px;padding:14px 16px;font-size:18px;line-height:1.45;margin-bottom:30px;flex:1;min-height:56px}
+.bubble::before{content:"";position:absolute;left:-9px;bottom:20px;width:14px;height:14px;background:var(--card);border:2px solid var(--line);border-width:0 0 2px 2px;transform:rotate(45deg)}
+.art{font-size:84px;text-align:center;margin:8px auto 4px;width:150px;height:150px;border-radius:44px;background:linear-gradient(135deg,var(--gold-l),var(--pri-l));display:grid;place-items:center;transform:rotate(-4deg)}
+.opts{display:grid;gap:10px}
+.opts.pics{grid-template-columns:1fr 1fr}
+.opt{position:relative;display:flex;align-items:center;gap:14px;text-align:left;padding:14px 16px;background:var(--card);border:2px solid var(--line);border-bottom-width:4px;border-radius:18px;font-size:17px;transition:background .15s,border-color .15s}
+.opt:hover{background:var(--soft)}
+.opt:active{transform:translateY(2px);border-bottom-width:2px;margin-bottom:2px}
+.opt kbd{font:inherit;font-size:13px;color:var(--mute);border:2px solid var(--line);border-radius:9px;width:28px;height:28px;display:grid;place-items:center;flex:none}
+.opts.pics .opt{flex-direction:column;text-align:center;padding:18px 12px;gap:8px}
+.opts.pics kbd{position:absolute;top:10px;left:10px;width:24px;height:24px;font-size:12px}
+.oe{font-size:44px}.oe.sm{font-size:30px}
+.opt.sel{background:var(--pri-l);border-color:var(--pri-b);color:var(--pri)}.opt.sel kbd{border-color:var(--pri-b);color:var(--pri)}
+.opt.good{background:var(--ok-l);border-color:var(--ok);color:var(--ok-d)}
+.opt.bad{background:var(--bad-l);border-color:var(--bad);color:var(--bad-d)}
+.line{min-height:112px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;padding:8px 0;background:repeating-linear-gradient(transparent 0 54px,var(--line) 54px 56px)}
+.bank{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:28px}
+.chipw{padding:10px 14px;border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;font-size:17px;background:var(--card)}
+.chipw.used{background:var(--line);color:transparent;border-color:var(--line)}
+.match{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.match>div{display:grid;gap:10px}
+.match .opt{justify-content:center;text-align:center;min-height:64px}
+.opt.gone{opacity:.35;pointer-events:none;background:var(--card);border-color:var(--line);color:var(--mute)}
+.lfoot{border-top:2px solid var(--line);padding:22px 20px;background:var(--card)}
+.lfoot>div{max-width:1000px;margin:0 auto;display:flex;justify-content:flex-end}
+.sheet{position:fixed;left:0;right:0;bottom:0;padding:24px 20px;z-index:3;visibility:hidden;border-radius:28px 28px 0 0;box-shadow:0 -10px 30px -12px rgba(39,37,58,.2)}
+.sheet.good{background:var(--ok-l);color:var(--ok-d)}.sheet.bad{background:var(--bad-l);color:var(--bad-d)}
+.sin{max-width:1000px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.sico{width:60px;height:60px;border-radius:20px;background:var(--card);display:grid;place-items:center;font-size:32px;font-weight:900;flex:none}
+.stxt{flex:1;min-width:180px}.stxt h3{font-size:24px}.stxt p{font-size:16px;margin-top:2px}.stxt .why{opacity:.85}
+.combo{position:fixed;top:80px;left:50%;translate:-50% 0;background:var(--fire);color:#fff;padding:10px 18px;border-radius:99px;font-family:var(--hf);font-weight:600;font-size:19px;box-shadow:0 4px 0 var(--fire-d);z-index:5}
+.fin{text-align:center;padding-top:10px}
+.fin h1{font-size:34px;color:var(--pri);margin-top:8px}
+.fin p{font-size:18px;color:var(--ink2);margin:6px 0 24px}
+.fin .btn{margin:6px}
+.stats{display:flex;gap:12px;justify-content:center}
+.sc{flex:1;max-width:150px;border:2px solid var(--c);border-radius:20px;background:var(--c);overflow:hidden}
+.sc b{display:block;color:#fff;font-size:12px;letter-spacing:.8px;padding:6px 0}
+.sc div{background:var(--card);border-radius:18px;padding:14px 0;font-size:22px;font-weight:900;color:var(--c)}
+.earn{margin-top:22px;font-size:20px;font-weight:900;color:var(--gold-d)}
+.flame{font-size:120px;line-height:1}
+.bign{font-family:var(--hf);font-size:96px;font-weight:600;color:var(--fire);line-height:1}
+.fin h1.fire{color:var(--fire)}.fin h1.bad{color:var(--bad)}
+.week{display:flex;gap:10px;justify-content:center;margin:26px 0 8px}
+.week div{display:grid;gap:6px;justify-items:center;color:var(--ink2);font-size:14px}
+.week i{width:34px;height:34px;border-radius:12px;background:var(--line);display:grid;place-items:center;font-style:normal;color:#fff}
+.week i.on{background:var(--fire)}
+.modal{position:fixed;inset:0;background:rgba(39,37,58,.5);display:grid;place-items:end center;z-index:9}
+.modal>div{background:var(--card);width:100%;max-width:520px;border-radius:28px 28px 0 0;padding:28px;text-align:center;display:grid;gap:12px;justify-items:center}
+input.name{width:100%;font:inherit;font-size:19px;padding:16px;border:2px solid var(--line);border-radius:18px;background:var(--card);outline:none;color:var(--ink)}
+input.name::placeholder{color:var(--mute)}
+input.name:focus{border-color:var(--pri-b);box-shadow:0 0 0 4px var(--pri-l)}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:99;overflow:hidden}
+#fx i{position:absolute;top:0;left:50%;width:10px;height:14px;border-radius:3px}
+.chip{overflow:visible;flex:none}
+/* onboarding */
+.boot{min-height:100vh;display:grid;place-items:center}
+.or{display:flex;align-items:center;gap:12px;color:var(--mute);font-weight:800;margin:14px 0;text-transform:uppercase;font-size:13px}.or::before,.or::after{content:"";flex:1;height:2px;background:var(--line)}
+.welcome{min-height:100vh;display:grid;place-items:center;position:relative;overflow:hidden;padding:24px;background:radial-gradient(circle at 50% 30%,var(--pri-l),var(--bg) 62%)}
+.wbox{position:relative;width:100%;max-width:400px;display:grid;justify-items:center;gap:12px;text-align:center}
+.brand{font-size:60px;color:var(--pri);line-height:1;margin-top:4px}.tag{font-size:19px;color:var(--ink2);margin-bottom:18px}
+.float{position:absolute;font-size:34px;opacity:.4;pointer-events:none;user-select:none}
+.obtop{display:flex;align-items:center;gap:16px;max-width:640px;margin:0 auto;padding:22px 20px 6px}
+.obtop .bar i{width:0}
+.obbody{max-width:560px;margin:0 auto;padding:14px 20px 130px}
+.obbody .talk{margin-bottom:26px}.obbody .name{margin-bottom:10px}
+.obfoot{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:2px solid var(--line);padding:18px 20px calc(18px + env(safe-area-inset-bottom))}
+.obfoot .btn{display:flex;width:100%;max-width:560px;margin:0 auto}
+.pwrap{position:relative}.pwrap .name{padding-right:54px}.eye{position:absolute;right:10px;top:8px;font-size:20px;padding:8px;opacity:.7}
+.links{display:grid;justify-items:center;gap:2px;margin-top:10px}.err{color:var(--bad);min-height:22px;font-size:15px;margin:6px 0}.link{color:var(--pri);font-weight:800;padding:6px}
+.gbtn{color:var(--ink)!important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="lesson" class="lesson" hidden></div>
+<div id="fx"></div>
+<script>
+/* ---------- content ---------- */
+const I=(title,text,art)=>({t:'info',title,text,art});
+const M=(q,opts,a,why,tag)=>{const o=opts.map(s=>{const [e,l]=s.includes('|')?s.split('|'):['',s];return{e,l}});return{t:'mc',q,opts:o,ans:o[a].l,why,tag}};
+const T=(q,v,why,tag)=>({t:'mc',tf:1,q,opts:[{e:'👍',l:'True'},{e:'👎',l:'False'}],ans:v?'True':'False',why,tag});
+const B=(q,answer,extra,tag)=>({t:'build',q,answer,extra,tag});
+const P=(pairs,tag)=>({t:'match',pairs,tag});
+
+const TAGS={share:'What a stock is',owner:'Being an owner',why:'Why companies sell',ipo:'IPOs',price:'Price moves',gain:'Gains & losses',div:'Dividends',market:'The market',ticker:'Ticker symbols',supply:'Supply & demand',risk:'Risk & diversifying',long:'Long-term thinking'};
+
+const COURSE=[
+{title:"What's a Stock?",sub:'Own a slice of a company',color:'#5B4CF5',c2:'#8B5CF6',dark:'#4031D4',icon:'🍕',lessons:[
+ {title:'Own a Slice',items:[
+  I('Meet the stock!','A company is like a giant pizza 🍕. A <b>stock</b> (also called a <b>share</b>) is one slice. Buy a slice and you own a tiny piece of the company!','🍕'),
+  M('What is a stock?',['🍕|A piece of a company','🏦|A kind of bank','🎟️|A movie ticket','🧸|A toy you rent'],0,'A stock is a small piece of ownership in a company.','share'),
+  T('If you own a share of a company, you own a tiny part of it.',true,'Yep! Owning shares makes you a part-owner.','owner'),
+  I('Shareholders','People who own stocks are called <b>shareholders</b>. Even kids can be shareholders — with a grown-up’s help!','🙋'),
+  M('Someone who owns stock is called a…',['🧑‍🍳|Chef','🙋|Shareholder','👮|Guard','🧑‍🏫|Teacher'],1,'Shareholder = someone who holds shares.','owner'),
+  B('So… what is a stock?','A stock is a piece of a company',['bank','toy'],'share'),
+  P([['Company','Whole pizza'],['Stock','One slice'],['Shareholder','Slice owner'],['Buy','Get a slice']],'share')]},
+ {title:'Why Sell Shares?',items:[
+  I('Growing costs money','Maya’s lemonade stand is a hit! 🍋 She wants a second stand but needs $100. She can <b>sell shares</b> to friends to raise the money.','🍋'),
+  M('Why do companies sell stock?',['💰|To raise money to grow','🎉|To throw parties','🧹|To clean the office','😴|To take a nap'],0,'Selling shares brings in money to build and grow.','why'),
+  T('When Maya sells shares, her friends become part-owners of the stand.',true,'Buying shares = owning a piece.','owner'),
+  M('Maya sells 10 shares for $10 each. How much does she raise?',['$10','$100','$1,000','$1'],1,'10 × $10 = $100.','why'),
+  I('The IPO','When a company sells shares to the public for the very first time, it’s called an <b>IPO</b> — an Initial Public Offering. It’s the company’s big debut! 🎤','🎤'),
+  M('What does IPO stand for?',['Initial Public Offering','Internet Pizza Order','Important Price Oops','Invest, Pay, Owe'],0,'IPO = Initial Public Offering.','ipo'),
+  B('Why do companies sell shares?','Companies sell shares to raise money',['spend','toys'],'why')]},
+ {title:'Up & Down',items:[
+  I('Prices move!','A stock’s price changes every day. When lots of people want it, the price goes <b>up</b> 📈. When fewer people want it, it goes <b>down</b> 📉.','📈'),
+  M('Lots of people suddenly want SuperSneaks stock. What likely happens?',['📈|Price goes up','📉|Price goes down','➖|Nothing ever','❌|The stock vanishes'],0,'More buyers usually push the price up.','price'),
+  T('A stock’s price stays the same forever once you buy it.',false,'Prices change all the time!','price'),
+  I('Gains & losses','Buy at $5, sell at $8? You <b>gained</b> $3 🎉. Buy at $5, sell at $3? That’s a $2 <b>loss</b>. Stocks can go down too.','⚖️'),
+  M('You buy a share for $5 and sell it for $8. What’s your gain?',['$3','$8','$13','$5'],0,'$8 − $5 = $3 gain.','gain'),
+  M('You buy for $10 and sell for $7. What happened?',['📉|You lost $3','📈|You gained $3','🤷|Nothing happened','🚀|You gained $17'],0,'$7 − $10 = −$3, a loss.','gain'),
+  P([['📈','Price up'],['📉','Price down'],['Gain','Sold for more'],['Loss','Sold for less']],'gain')]},
+ {title:'Owner Perks',items:[
+  I('Dividends','Some companies share their profits with shareholders. These payments are called <b>dividends</b> — like a thank-you bonus! 🎁','🎁'),
+  M('A dividend is…',['🎁|Profit paid to owners','🧾|A bill you pay','🏷️|A coupon','📦|A free product'],0,'Dividends are a slice of profits paid to shareholders.','div'),
+  T('Every company pays dividends.',false,'Many growing companies keep profits to grow instead.','div'),
+  I('You get a vote','Shareholders can <b>vote</b> on big company decisions. More shares = more votes! 🗳️','🗳️'),
+  M('How can shareholders help make company decisions?',['🗳️|By voting','📣|By yelling','🖍️|By drawing on walls','🎲|By rolling dice'],0,'Owners vote at shareholder meetings.','owner'),
+  B('What perks do shareholders get?','Shareholders can vote and may get dividends',['never','pizza'],'div')]},
+ {title:'Chapter Review',check:1}]},
+{title:'The Stock Market',sub:'Where stocks are bought & sold',color:'#0FB5AE',c2:'#1FA2FF',dark:'#0A8A85',icon:'🏛️',lessons:[
+ {title:'The Big Market',items:[
+  I('The stock market','The <b>stock market</b> is where people buy and sell stocks — like a giant farmers’ market, but for pieces of companies! 🏪','🏪'),
+  M('What happens at the stock market?',['🛒|People trade stocks','🥕|Only veggies are sold','🎢|Roller coaster rides','📚|Library books'],0,'It’s a marketplace for stocks.','market'),
+  I('Exchanges','Stocks trade on <b>exchanges</b> like the New York Stock Exchange (NYSE) and the Nasdaq. Today, most trading happens on computers! 💻','🏛️'),
+  T('Most stock trading today happens on computers.',true,'Yep — trades zip around in milliseconds.','market'),
+  M('Which of these is a stock exchange?',['🏛️|NYSE','🍔|NYPD','🏈|NFL','🚀|NASA'],0,'NYSE = New York Stock Exchange.','market'),
+  B('Where do people trade stocks?','The stock market is where people trade stocks',['eat','sleep'],'market')]},
+ {title:'Ticker Symbols',items:[
+  I('Ticker symbols','Every stock has a short nickname called a <b>ticker symbol</b>. Apple is <b>AAPL</b>, Disney is <b>DIS</b>, Nike is <b>NKE</b>.','🏷️'),
+  P([['AAPL','Apple 🍎'],['DIS','Disney 🏰'],['NKE','Nike 👟'],['MCD','McDonald’s 🍟']],'ticker'),
+  M('What is a ticker symbol?',['🏷️|A stock’s nickname','⏰|A kind of clock','🐛|A tiny bug','🎫|A lottery ticket'],0,'Tickers are short codes for stocks.','ticker'),
+  M('Which ticker belongs to Disney?',['DIS','DSN','MICKEY','DNY'],0,'Disney trades as DIS.','ticker'),
+  T('Ticker symbols are usually just a few letters long.',true,'Usually 1–5 letters.','ticker')]},
+ {title:'Supply & Demand',items:[
+  I('Supply & demand','When more people want to <b>buy</b> (demand) than <b>sell</b> (supply), prices rise. Like the hottest toy at the holidays! 🧸','🧸'),
+  M('Everyone wants the new RoboPup, but stores have only a few. The price will probably…',['📈|Go up','📉|Go down','🧊|Freeze','🎈|Float away'],0,'High demand + low supply = higher price.','supply'),
+  M('A company has bad news and lots of people want to sell. The price will probably…',['📉|Go down','📈|Go up','🔁|Double','🤐|Stay secret'],0,'More sellers than buyers pushes price down.','supply'),
+  T('Demand means how many people want to buy something.',true,'Right! Supply is how much is for sale.','supply'),
+  P([['High demand','Price rises'],['Low demand','Price falls'],['Supply','Amount for sale'],['Demand','Amount wanted']],'supply')]},
+ {title:'Egg Baskets',items:[
+  I('Risk','Stocks can go up <i>or</i> down, so investing has <b>risk</b>. You could lose money — that’s why smart investors are careful. ⚠️','⚠️'),
+  I('Diversify!','Don’t put all your eggs in one basket! Owning <b>many different</b> stocks means one bad egg won’t ruin everything.','🧺'),
+  M('What does diversifying mean?',['🧺|Owning many different things','🥚|Buying just one stock','🎰|Guessing randomly','💸|Spending it all'],0,'Spread out = safer.','risk'),
+  M('Which basket is safer?',['🧺|10 different companies','🥚|Just 1 company'],0,'If one company struggles, the others can help.','risk'),
+  T('Investing in stocks has no risk at all.',false,'All investing has some risk.','risk'),
+  B('What’s the golden rule?','Do not put all your eggs in one basket',['two','chicken'],'risk')]},
+ {title:'Think Long-Term',items:[
+  I('Patience is a superpower','Over many years, the stock market has generally grown — even with bumpy days along the way. Slow and steady! 🐢','🐢'),
+  I('Compound growth','When your money grows, the growth can grow too! Like a snowball rolling downhill, it gets bigger and bigger. ⛄','⛄'),
+  M('Why is investing for a long time helpful?',['🐢|Growth has time to build','⚡|You get rich overnight','🎲|It removes all risk','🙈|You never need to learn'],0,'Time lets compound growth do its magic.','long'),
+  M('The market drops for a week. What might a patient investor do?',['🧘|Stay calm, think long-term','😱|Panic and sell everything','🙈|Throw away the computer','🍦|Only eat ice cream'],0,'Short dips are normal over the long run.','long'),
+  P([['Snowball','Compound growth'],['Turtle','Patience'],['Basket','Diversify'],['Ticker','Stock nickname']],'long')]},
+ {title:'Chapter Review',check:1}]}];
+const FLAT=[];COURSE.forEach((c,ci)=>c.lessons.forEach((l,li)=>{l.id=`c${ci+1}l${li+1}`;l.ch=ci;FLAT.push(l)}));
+const LESSON=Object.fromEntries(FLAT.map(l=>[l.id,l]));
+
+/* ---------- state ---------- */
+const KEY='chip-stocks-v1',REGEN=20*60e3;
+const day=(o=0)=>{const d=new Date();d.setDate(d.getDate()+o);return d.toLocaleDateString('en-CA')};
+const DEF={name:'',goal:20,xp:0,coins:60,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],done:{},mastery:{},daily:{day:'',xp:0},owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day()};
+const blank=()=>({...structuredClone(DEF),heartsAt:Date.now(),joined:day()});
+let S;try{S={...blank(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{S=blank()}
+let user=null,syncOK=false,syncT,pending=null;
+// debounced cloud write; the snapshot is bound to its uid so a sign-out/sign-in can never cross accounts
+const flush=()=>{clearTimeout(syncT);if(pending){const[uid,d]=pending;pending=null;cloud.save(uid,d).catch(console.error)}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch{}
+ if(user&&syncOK){pending=[user.uid,{...structuredClone(S),email:user.email,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,updatedAt:Date.now()}];clearTimeout(syncT);syncT=setTimeout(flush,800)}};
+addEventListener('pagehide',flush);
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>`&#${c.charCodeAt(0)};`);
+const shuf=a=>a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
+const pick=a=>a[Math.random()*a.length|0];
+const streakNow=()=>[day(),day(-1)].includes(S.lastDay)?S.streak:0;
+const dailyXP=()=>S.daily.day===day()?S.daily.xp:0;
+function regen(){if(S.hearts>=5){S.heartsAt=Date.now();return}const n=Math.floor((Date.now()-S.heartsAt)/REGEN);if(n>0){S.hearts=Math.min(5,S.hearts+n);S.heartsAt+=n*REGEN}}
+const nextHeartMin=()=>Math.ceil((REGEN-(Date.now()-S.heartsAt))/60e3);
+const curLesson=()=>FLAT.find(l=>!S.done[l.id])?.id;
+
+/* ---------- adaptive engine: Leitner boxes per concept ---------- */
+const INTERVAL=[0,1,2,4,7,14]; // days until a concept is "due" again, by box
+function mark(tag,ok){const m=S.mastery[tag]||{box:0,due:0,seen:0,right:0};m.seen++;if(ok){m.right++;m.box=Math.min(5,m.box+1)}else m.box=0;m.due=Date.now()+INTERVAL[m.box]*864e5;S.mastery[tag]=m}
+const strength=t=>(S.mastery[t]?.box||0)/5;
+const gradable=ls=>ls.flatMap(l=>(l.items||[]).filter(i=>i.t!=='info'));
+// ponytail: score = weakness + overdue bonus + jitter; swap for per-item SM-2 if content grows large
+function pickPractice(){const now=Date.now();return gradable(FLAT.filter(l=>S.done[l.id])).map(i=>{const m=S.mastery[i.tag]||{box:0,due:0};return[i,(1-m.box/5)*2+(m.due<=now)+Math.random()*.6]}).sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0])}
+const weakTags=()=>Object.keys(S.mastery).sort((a,b)=>strength(a)-strength(b)||(S.mastery[a].right/S.mastery[a].seen)-(S.mastery[b].right/S.mastery[b].seen));
+
+/* ---------- sound ---------- */
+let AC;function beep(notes,type='sine',gap=.09,vol=.12){if(!S.sound)return;try{AC=AC||new(window.AudioContext||webkitAudioContext)();const t=AC.currentTime;notes.forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(vol,t+i*gap);g.gain.exponentialRampToValueAtTime(.001,t+i*gap+.28);o.connect(g).connect(AC.destination);o.start(t+i*gap);o.stop(t+i*gap+.3)})}catch{}}
+const SFX={ok:()=>beep([784,1175]),bad:()=>beep([220,165],'square',.13,.05),tap:()=>beep([600],'triangle',0,.06),win:()=>beep([523,659,784,1047,1319],'triangle',.1),coin:()=>beep([988,1319],'square',.07,.05)};
+
+/* ---------- mascot: Chip the Bull ---------- */
+function chip(size=140,wear=S.wear){const w=k=>wear.includes(k);return `<svg class="chip" viewBox="0 0 200 212" width="${size}" height="${size*1.06}" aria-hidden="true">
+<ellipse cx="100" cy="204" rx="48" ry="7" fill="#000" opacity=".08"/>
+<g class="m-root">
+ <rect x="68" y="168" width="22" height="34" rx="11" fill="#C96E2F"/><rect x="110" y="168" width="22" height="34" rx="11" fill="#C96E2F"/>
+ <ellipse cx="100" cy="160" rx="54" ry="36" fill="#E8914A"/><ellipse cx="100" cy="170" rx="32" ry="22" fill="#FFD9B0"/>
+ <ellipse class="m-armL" cx="50" cy="158" rx="12" ry="20" fill="#D97B38"/><ellipse class="m-armR" cx="150" cy="158" rx="12" ry="20" fill="#D97B38"/>
+ <g class="m-head">
+  <path d="M54 64Q28 52 34 22Q46 44 68 50Z" fill="#FFF1D0" stroke="#E6C88F" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M146 64Q172 52 166 22Q154 44 132 50Z" fill="#FFF1D0" stroke="#E6C88F" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="42" cy="86" rx="18" ry="10" fill="#D97B38" transform="rotate(-22 42 86)"/><ellipse cx="158" cy="86" rx="18" ry="10" fill="#D97B38" transform="rotate(22 158 86)"/>
+  <ellipse cx="100" cy="92" rx="58" ry="54" fill="#E8914A"/>
+  <path d="M84 44Q90 26 100 40Q108 24 116 44Z" fill="#C96E2F"/>
+  <g class="m-eyes"><ellipse cx="78" cy="82" rx="13" ry="15" fill="#fff"/><ellipse cx="122" cy="82" rx="13" ry="15" fill="#fff"/>
+   <circle cx="80" cy="85" r="7.5" fill="#2B2B2B"/><circle cx="124" cy="85" r="7.5" fill="#2B2B2B"/>
+   <circle cx="82.5" cy="82" r="2.6" fill="#fff"/><circle cx="126.5" cy="82" r="2.6" fill="#fff"/></g>
+  <path d="M66 62Q78 56 88 62M112 62Q122 56 134 62" stroke="#8A4A1E" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <circle cx="58" cy="106" r="9" fill="#FF7E9D" opacity=".45"/><circle cx="142" cy="106" r="9" fill="#FF7E9D" opacity=".45"/>
+  <ellipse cx="100" cy="118" rx="36" ry="24" fill="#FFD9B0"/>
+  <ellipse cx="88" cy="113" rx="4.5" ry="6" fill="#B5652E"/><ellipse cx="112" cy="113" rx="4.5" ry="6" fill="#B5652E"/>
+  <path d="M86 127Q100 139 114 127" stroke="#8A4A1E" stroke-width="4" fill="none" stroke-linecap="round"/>
+  ${w('shades')?'<g fill="#1d1d1d"><rect x="60" y="72" width="36" height="22" rx="9"/><rect x="104" y="72" width="36" height="22" rx="9"/><rect x="94" y="78" width="12" height="4"/><rect x="66" y="76" width="10" height="4" fill="#fff" opacity=".5"/></g>':''}
+  ${w('hat')?'<g><rect x="60" y="38" width="80" height="11" rx="5" fill="#2B2B3A"/><rect x="73" y="0" width="54" height="42" rx="6" fill="#2B2B3A"/><rect x="73" y="28" width="54" height="8" fill="#FF4B4B"/></g>':''}
+  ${w('crown')?'<path d="M68 46L72 14L87 30L100 6L113 30L128 14L132 46Z" fill="#FFC800" stroke="#E5A500" stroke-width="3" stroke-linejoin="round"/>':''}
+ </g>
+ ${w('tie')?'<g><path d="M100 152L78 140V164ZM100 152L122 140V164Z" fill="#5B4CF5"/><circle cx="100" cy="152" r="7" fill="#4031D4"/></g>':''}
+</g></svg>`}
+let loops=[];
+function animateChips(root=document){$$('.chip',root).forEach(c=>{if(c._a)return;c._a=1;
+ loops.push(gsap.to($('.m-root',c),{y:-5,duration:1.1,repeat:-1,yoyo:true,ease:'sine.inOut',delay:Math.random()}));
+ loops.push(gsap.timeline({repeat:-1,repeatDelay:2+Math.random()*3}).to($('.m-eyes',c),{scaleY:.1,transformOrigin:'50% 50%',duration:.07}).to($('.m-eyes',c),{scaleY:1,duration:.1}))})}
+function react(mood,root=$('#lesson')){const c=$('.chip',root);if(!c)return;
+ if(mood==='happy'){gsap.timeline().to(c,{y:-26,scaleY:1.06,duration:.22,ease:'power2.out'}).to(c,{y:0,scaleY:1,duration:.5,ease:'bounce.out'});wave(c,2)}
+ else gsap.timeline().to($('.m-head',c),{rotation:-8,y:6,transformOrigin:'50% 90%',duration:.2}).to($('.m-head',c),{rotation:8,duration:.12,repeat:3,yoyo:true}).to($('.m-head',c),{rotation:0,y:0,duration:.3})}
+const wave=(c,n=3)=>gsap.fromTo($('.m-armR',c),{rotation:0},{rotation:-50,transformOrigin:'30% 10%',duration:.18,repeat:n*2-1,yoyo:true});
+function confetti(){const fx=$('#fx'),cols=['#5B4CF5','#8B5CF6','#FFB31A','#10B981','#FF5470','#1FA2FF','#FF7A1A'];for(let i=0;i<90;i++){const p=document.createElement('i');p.style.background=pick(cols);fx.appendChild(p);gsap.fromTo(p,{x:0,y:innerHeight*.35,rotation:0},{x:(Math.random()-.5)*innerWidth*1.1,y:-innerHeight*.1+Math.random()*innerHeight*.3,rotation:Math.random()*720,duration:.8,ease:'power3.out'});gsap.to(p,{y:innerHeight+40,duration:1.6+Math.random(),delay:.8,ease:'power1.in',onComplete:()=>p.remove()})}}
+
+/* ---------- icons ---------- */
+const COIN='<svg class="ci" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5" fill="#FFB31A"/><circle cx="12" cy="12" r="7" fill="#FFC94D" stroke="#E09405" stroke-width="1.8"/><path d="M12 8.2l1.1 2.4 2.6.3-1.9 1.8.5 2.6-2.3-1.3-2.3 1.3.5-2.6-1.9-1.8 2.6-.3z" fill="#E09405"/></svg>';
+const ICO={star:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5-4.8-4.6 6.6-.9z"/></svg>',check:'<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'};
+
+/* ---------- app shell ---------- */
+let tab='learn',justDone=null;
+const TABS=[['learn','🏠','Learn'],['practice','🎯','Practice'],['shop','🛍️','Shop'],['profile','🐂','Profile']];
+function go(t=tab){tab=t;regen();loops.forEach(x=>x.kill());loops=[];
+ if(!S.name)return onboard(user?1:0);
+ $('#app').innerHTML=`<div class="shell"><nav class="nav"><div class="logo">${chip(40)}chip</div>${TABS.map(([k,e,n])=>`<button data-tab="${k}" class="${k===tab?'on':''}" aria-label="${n}"><span>${e}</span><b>${n}</b></button>`).join('')}</nav>
+ <main><div class="top"><div class="stat crs">📈 Stocks</div><div class="stat fire ${S.lastDay===day()?'':'off'}" title="Day streak">🔥 ${streakNow()}</div><div class="stat coin" title="Coins">${COIN} ${S.coins}</div><div class="stat heart" title="Hearts">❤️ ${S.hearts}</div></div>${({learn,practice,shop,profile})[tab]()}</main>
+ <aside class="side">${goalCard()}${skillsCard()}</aside></div>`;
+ $$('[data-tab]').forEach(b=>b.onclick=()=>{SFX.tap();go(b.dataset.tab);scrollTo(0,0)});
+ animateChips($('#app'));
+ gsap.from('main > :not(.top)',{y:16,opacity:0,duration:.4,stagger:.05,ease:'power2.out'});
+ if(tab==='learn')afterLearn();
+ bind[tab]?.();}
+
+function goalCard(){const x=dailyXP(),p=Math.min(100,x/S.goal*100);return `<div class="card"><h3>Daily Goal</h3><div class="goal"><span>⚡</span><div class="gbar"><i style="width:${p}%"></i><em>${x} / ${S.goal} XP</em></div><span>${p>=100?'🎉':'🎁'}</span></div></div>`}
+function skillsCard(){const t=Object.keys(S.mastery);return `<div class="card"><h3>Your Skills</h3>${t.length?t.map(k=>{const s=strength(k);return `<div class="skill"><b>${TAGS[k]}</b><div class="sbar"><i style="width:${Math.max(6,s*100)}%;background:${s>.6?'var(--ok)':s>.2?'var(--gold)':'var(--bad)'}"></i></div></div>`}).join(''):'<p class="muted" style="margin-top:8px">Finish a lesson to see your skills grow!</p>'}</div>`}
+
+/* learn */
+const OFF=[0,52,78,52,0,-52,-78,-52];
+const canJump=(l,cur)=>l.check&&S.level>0&&!S.done[l.id]&&LESSON[cur]?.ch===l.ch;
+function learn(){const cur=curLesson();return COURSE.map((ch,ci)=>`<section class="unit"><div class="banner" style="--c:${ch.color};--c2:${ch.c2}"><div><small>CHAPTER ${ci+1}</small><h2>${ch.title}</h2><p>${ch.sub}</p><div class="bprog"><i><b style="width:${ch.lessons.filter(l=>S.done[l.id]).length/ch.lessons.length*100}%"></b></i>${ch.lessons.filter(l=>S.done[l.id]).length} / ${ch.lessons.length}</div></div><div class="bicon">${ch.icon}</div></div>
+ <div class="path"><div class="pmascot" style="${ci%2?'right':'left'}:4%">${chip(120)}</div>${ch.lessons.map((l,li)=>{const st=S.done[l.id]?'done':l.id===cur?'cur':canJump(l,cur)?'jump':'lock';
+ return `<div class="row" style="--x:${OFF[(li+ci*4)%8]}px;--c:${ch.color};--d:${ch.dark}">${st==='cur'?'<div class="start">Start</div>':st==='jump'?'<div class="start gold">Jump here?</div>':''}<button class="node ${st}" data-id="${l.id}" aria-label="${l.title}">${l.check?'<span class="tro">🏆</span>':st==='done'?ICO.check:ICO.star}</button></div>`}).join('')}</div></section>`).join('')+(FLAT.every(l=>S.done[l.id])?`<div class="card fincard">${chip(110)}<div><h3>You finished every chapter! 🎉</h3><p class="muted">New chapters are on the way. Keep your streak alive in the Practice tab!</p></div></div>`:'')}
+function afterLearn(){drawTrails();gsap.to('.start',{y:-6,duration:.8,repeat:-1,yoyo:true,ease:'sine.inOut'});
+ $$('.pmascot').forEach(m=>loops.push(gsap.timeline({repeat:-1,repeatDelay:4}).call(()=>wave(m,2))));
+ const cur=$('.node.cur');
+ if(justDone&&cur){cur.scrollIntoView({block:'center'});gsap.from(cur,{scale:0,duration:1,delay:.3,ease:'elastic.out(1,.45)'});justDone=null}
+ else if(cur&&tab==='learn'&&!go._scrolled){go._scrolled=1;cur.scrollIntoView({block:'center'})}}
+// the path is drawn like a stock chart: solid up to where you are, dashed after
+function drawTrails(){$$('.path').forEach(p=>{const pr=p.getBoundingClientRect(),n=$$('.node',p).map(x=>{const r=x.getBoundingClientRect();return[r.left+r.width/2-pr.left,r.top+r.height/2-pr.top,x.classList.contains('done')]});
+ const d=pts=>pts.map((q,i)=>i?`Q${pts[i-1][0]} ${(pts[i-1][1]+q[1])/2} ${(pts[i-1][0]+q[0])/2} ${(pts[i-1][1]+q[1])/2} T${q[0]} ${q[1]}`:`M${q[0]} ${q[1]}`).join(' ');
+ const k=n.findIndex(q=>!q[2]),c=getComputedStyle(p.previousElementSibling).getPropertyValue('--c');
+ p.insertAdjacentHTML('afterbegin',`<svg class="trail"><path d="${d(n)}" fill="none" stroke="var(--line)" stroke-width="8" stroke-linecap="round" stroke-dasharray="1 16"/>${k!==0?`<path class="tdone" d="${d(k<0?n:n.slice(0,k+1))}" fill="none" stroke="${c}" stroke-opacity=".35" stroke-width="8" stroke-linecap="round"/>`:''}</svg>`)})}
+const bind={learn(){$$('.node').forEach(n=>n.onclick=e=>{e.stopPropagation();SFX.tap();const had=n.parentNode.querySelector('.pop');$$('.pop').forEach(p=>p.remove());if(had)return;
+  const l=LESSON[n.dataset.id],st=n.classList.contains('lock')?'lock':n.classList.contains('jump')?'jump':'';const pos=COURSE[l.ch].lessons.indexOf(l)+1;
+  const p=document.createElement('div');p.className='pop '+st;
+  p.innerHTML=st==='lock'?`<h3>${l.title}</h3><p>Finish all levels above to unlock this!</p><button class="btn" disabled>🔒 Locked</button>`:st==='jump'?`<h3>Jump ahead?</h3><p>Pass this review with 2 mistakes or fewer to skip the whole chapter.</p><button class="btn">Jump here +15 XP</button>`:`<h3>${l.title}</h3><p>${l.check?'Show what you learned!':`Lesson ${pos} of ${COURSE[l.ch].lessons.length}`}</p><button class="btn">${S.done[l.id]?'Practice +5 XP':`Start +${l.check?15:10} XP`}</button>`;
+  n.parentNode.appendChild(p);gsap.from(p,{scale:.7,opacity:0,y:-10,duration:.35,ease:'back.out(2)'});
+  if(st!=='lock')p.querySelector('.btn').onclick=()=>startLesson(l.id)});
+ document.onclick=()=>$$('.pop').forEach(p=>p.remove())},
+ practice(){$('#goP')&&($('#goP').onclick=()=>startLesson('practice'))},
+ shop(){$$('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy))},
+ profile(){$('#snd').onclick=()=>{S.sound=!S.sound;save();go()};$('#so').onclick=()=>window.cloud?.signOut();$('#emo').onclick=()=>{S.emailOptIn=!S.emailOptIn;save();go()};$('#gl').onclick=()=>{const g=[10,20,30,50];S.goal=g[(g.indexOf(S.goal)+1)%4];save();go()};
+  $('#rst').onclick=e=>{if(e.target.dataset.ok){S={...blank(),name:S.name,goal:S.goal,joined:S.joined,emailOptIn:S.emailOptIn,heartsAt:Date.now()};save();go()}else{e.target.dataset.ok=1;e.target.textContent='Tap again to erase everything'}}}};
+
+/* practice */
+function practice(){const n=Object.keys(S.done).length,w=weakTags().slice(0,3);return `<div class="pagehead"><div><h1>Practice Hub</h1><p class="muted">Personalized review · no hearts lost · +1 ❤️</p></div></div>
+ <div class="hero">${chip(110)}<div><h2>${n?`Hey ${esc(S.name)}! I made you a workout 💪`:'Finish your first lesson!'}</h2><p class="muted">${n?'I picked the questions you need most, based on what you’ve missed and what’s due for review.':'Then I’ll build practice sessions just for you.'}</p></div></div>
+ ${n?`<div class="card"><h3>Focus skills</h3>${w.map(k=>{const s=strength(k);return `<div class="skill"><b>${TAGS[k]}</b><div class="sbar"><i style="width:${Math.max(6,s*100)}%;background:${s>.6?'var(--ok)':s>.2?'var(--gold)':'var(--bad)'}"></i></div></div>`}).join('')}<button class="btn wide" id="goP" style="margin-top:14px">Start practice +10 XP</button></div>`:''}
+ <div class="mob" style="margin-top:16px">${goalCard()}</div>`}
+
+/* shop */
+const SHOP=[{id:'refill',n:'Heart Refill',d:'Fill up all 5 hearts',p:50,e:'❤️'},{id:'tie',n:'Bow Tie',d:'A dapper deal-maker',p:60,e:'🎀'},{id:'shades',n:'Cool Shades',d:'For bright bull markets',p:80,e:'🕶️'},{id:'hat',n:'Top Hat',d:'Very fancy investor',p:120,e:'🎩'},{id:'crown',n:'Gold Crown',d:'King of the market',p:250,e:'👑'}];
+function shop(){return `<div class="pagehead"><h1>Shop</h1></div><div class="hero" id="shopHero">${chip(130)}<div><h2>Dress up Chip!</h2><p class="muted">Earn ${COIN} by finishing lessons. Perfect lessons earn double.</p><p style="font-size:22px;color:var(--gold-d);margin-top:6px">${COIN} ${S.coins}</p></div></div>
+ <div class="list">${SHOP.map(i=>{const own=S.owned.includes(i.id),on=S.wear.includes(i.id);let b;
+  if(i.id==='refill')b=`<button class="btn" data-buy="refill" ${S.hearts>=5||S.coins<i.p?'disabled':''}>${S.hearts>=5?'Full':COIN+' '+i.p}</button>`;
+  else b=own?`<button class="btn ${on?'ghost':''}" data-buy="${i.id}">${on?'Take off':'Wear'}</button>`:`<button class="btn gold" data-buy="${i.id}" ${S.coins<i.p?'disabled':''}>${COIN} ${i.p}</button>`;
+  return `<div class="shopitem"><span class="ae">${i.e}</span><div><h3>${i.n}</h3><p class="muted">${i.d}</p></div>${b}</div>`}).join('')}</div>`}
+function buy(id){const i=SHOP.find(x=>x.id===id);
+ if(id==='refill'){if(S.coins<i.p||S.hearts>=5)return;S.coins-=i.p;S.hearts=5}
+ else if(!S.owned.includes(id)){if(S.coins<i.p)return;S.coins-=i.p;S.owned.push(id);S.wear.push(id)}
+ else S.wear=S.wear.includes(id)?S.wear.filter(x=>x!==id):[...S.wear,id];
+ if(S.wear.includes(id)&&['hat','crown'].includes(id))S.wear=S.wear.filter(x=>x===id||!['hat','crown'].includes(x));
+ save();SFX.coin();go();react('happy',$('#shopHero'))}
+
+/* profile */
+function profile(){const c1=COURSE[0].lessons.filter(l=>S.done[l.id]).length;
+ const A=[['🎓','First Steps','Finish your first lesson',S.lessons,1],['🔥','On Fire','Reach a 3-day streak',S.best,3],['💎','Perfectionist','Get 3 perfect lessons',S.perfects,3],['⚡','XP Hunter','Earn 200 XP',S.xp,200],['🏆','Chapter Champ','Finish Chapter 1',c1,COURSE[0].lessons.length],['🐂','Bull Market','Finish both chapters',Object.keys(S.done).length,FLAT.length]];
+ return `<div class="hero">${chip(110)}<div><h2>${esc(S.name)}</h2><p class="muted">Joined ${new Date(S.joined+'T00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'})}</p></div></div>
+ <h2 class="sec">Statistics</h2><div class="grid2">${[['🔥',streakNow(),'Day streak'],['⚡',S.xp,'Total XP'],['📚',S.lessons,'Lessons done'],['💎',S.perfects,'Perfect lessons']].map(([e,v,l])=>`<div class="sc2"><span>${e}</span><div><b>${v}</b><small>${l}</small></div></div>`).join('')}</div>
+ <h2 class="sec">Achievements</h2><div class="list">${A.map(([e,n,d,v,m])=>`<div class="ach ${v>=m?'':'no'}"><span class="ae">${e}</span><div><h3>${n}</h3><p class="muted">${d}</p><div class="sbar"><i style="width:${Math.min(100,v/m*100)}%;background:var(--gold)"></i></div></div><b>${Math.min(v,m)}/${m}</b></div>`).join('')}</div>
+ <h2 class="sec">Account</h2><div class="list"><div class="toggle"><b>${esc(user?.email||'Not signed in')}</b><button class="btn ghost" id="so">Sign out</button></div>
+ <div class="toggle"><div><b>Streak emails</b><p class="muted" style="font-size:14px">Reminders before your streak ends</p></div><button class="btn ghost" id="emo">${S.emailOptIn?'On 📬':'Off'}</button></div></div>
+ <h2 class="sec">Settings</h2><div class="list"><div class="toggle"><b>Sound effects</b><button class="btn ghost" id="snd">${S.sound?'On 🔊':'Off 🔇'}</button></div>
+ <div class="toggle"><b>Daily goal</b><button class="btn ghost" id="gl">${S.goal} XP</button></div>
+ <div class="toggle"><b>Reset progress</b><button class="btn red" id="rst">Reset</button></div></div>
+ <div class="mob" style="margin-top:20px">${skillsCard()}</div>`}
+
+/* onboarding */
+const LEVELS=[['🌱','I’m brand new','Perfect! We’ll start from the very beginning.'],['🌿','I know a little','Nice! If you pass the Chapter 1 review, you can skip ahead.'],['🌳','I know a lot','Wow! Try the Chapter 1 review to jump straight to Chapter 2.']];
+const GOALS=[[10,'🐢','Casual','5 min / day'],[20,'🐇','Regular','10 min / day'],[30,'🐎','Serious','15 min / day'],[50,'🚀','Intense','20 min / day']];
+function typeIn(el,text){const o={n:0};el.textContent='';return gsap.to(o,{n:text.length,duration:Math.min(1.2,text.length*.022),ease:'none',onUpdate:()=>el.textContent=text.slice(0,Math.round(o.n))})}
+function obShell(step,body,foot,auth){const a=$('#app');
+ a.innerHTML=`<div class="obtop"><button class="x back" id="bk" aria-label="Back">←</button>${auth==='in'?'<div style="flex:1"></div>':`<div class="bar"><i style="width:${(step-1)/4*100}%"></i></div>`}</div><div class="obbody">${body}</div>${foot?`<div class="obfoot"><button class="btn" id="nx">${foot}</button></div>`:''}`;
+ gsap.to('.obtop .bar i',{width:step/4*100+'%',duration:.5,ease:'power2.out'});
+ animateChips(a);gsap.from('.obbody > *',{y:18,opacity:0,stagger:.06,duration:.4,ease:'back.out(1.6)'});
+ $('#bk').onclick=()=>{SFX.tap();onboard(auth==='in'?0:step-1)};return a}
+function onboard(step=0,mode='up'){loops.forEach(x=>x.kill());loops=[];const a=$('#app');
+ if(user&&(step===0||step===4))step=1; // signed in but no profile yet: only ask the profile questions
+ if(step===0){
+  a.innerHTML=`<div class="welcome">${['📈','🎯','💰','🐷','📊','💵','🏦','⭐'].map((e,i)=>`<span class="float" style="left:${[8,82,15,75,5,88,30,62][i]}%;top:${[12,18,70,64,40,42,88,85][i]}%">${e}</span>`).join('')}
+  <div class="wbox">${chip(210)}<div class="brand">chip</div><p class="tag">The fun way to learn about money &amp; stocks!</p>
+  <button class="btn wide" id="nx">Get started</button><button class="btn ghost wide" id="have">I already have an account</button></div></div>`;
+  animateChips(a);const c=$('.chip',a);
+  gsap.from(c,{scale:0,rotation:-15,duration:.9,ease:'elastic.out(1,.5)'});gsap.from('.wbox > :not(.chip)',{y:24,opacity:0,stagger:.1,delay:.3,duration:.5,ease:'back.out(1.7)'});
+  $$('.float').forEach((f,i)=>loops.push(gsap.to(f,{y:-18,rotation:i%2?12:-12,duration:2+i*.3,repeat:-1,yoyo:true,ease:'sine.inOut'})));
+  loops.push(gsap.timeline({repeat:-1,repeatDelay:2.5,delay:1}).call(()=>wave(c)));
+  $('#nx').onclick=()=>{SFX.tap();onboard(1)};$('#have').onclick=()=>{SFX.tap();onboard(4,'in')};return}
+ if(step===4)return authStep(mode);
+ if(step===1){obShell(1,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><input class="name" id="nm" maxlength="20" placeholder="Your first name" autocomplete="off" value="${esc(S.name)}"><p class="muted" style="margin-top:10px;font-size:14px">Just your first name, no last names!</p>`,'Continue');
+  const nx=$('#nx'),nm=$('#nm');typeIn($('#bb'),'Hi there! I’m Chip 🐂 What should I call you?');
+  const upd=()=>nx.disabled=!nm.value.trim();upd();nm.focus();nm.oninput=upd;nm.onkeydown=e=>e.key==='Enter'&&!nx.disabled&&nx.click();
+  nx.onclick=()=>{SFX.tap();S.name=nm.value.trim();onboard(2)};return}
+ if(step===2){obShell(2,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><div class="opts">${LEVELS.map(([e,n],i)=>`<button class="opt ${S.level===i?'sel':''}" data-l="${i}"><span class="oe sm">${e}</span><b>${n}</b></button>`).join('')}</div>`,'Continue');
+  typeIn($('#bb'),`Nice to meet you, ${S.name}! How much do you know about stocks?`);
+  $$('[data-l]').forEach(b=>b.onclick=()=>{SFX.tap();S.level=+b.dataset.l;$$('[data-l]').forEach(x=>x.classList.toggle('sel',x===b));gsap.fromTo(b,{scale:.96},{scale:1,duration:.3,ease:'back.out(3)'});react('happy',a);typeIn($('#bb'),LEVELS[S.level][2])});
+  $('#nx').onclick=()=>{SFX.tap();onboard(3)};return}
+ if(step===3){obShell(3,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><div class="opts">${GOALS.map(([g,e,n,d])=>`<button class="opt ${g===S.goal?'sel':''}" data-g="${g}"><span class="oe sm">${e}</span><b style="flex:1">${n}</b><span class="muted">${d}</span></button>`).join('')}</div>`,user?'Let’s go!':'Continue');
+  typeIn($('#bb'),'Pick a daily goal. Small steps every day make a big difference!');
+  $$('[data-g]').forEach(b=>b.onclick=()=>{SFX.tap();S.goal=+b.dataset.g;$$('[data-g]').forEach(x=>x.classList.toggle('sel',x===b));gsap.fromTo(b,{scale:.96},{scale:1,duration:.3,ease:'back.out(3)'});react('happy',a);const g=GOALS.find(x=>x[0]===S.goal);typeIn($('#bb'),`${g[2]}: that’s ${g[3].replace(' / day','')} a day. You’ve got this, ${S.name}!`)});
+  $('#nx').onclick=()=>{SFX.tap();if(!user)return onboard(4,'up');save();go('learn')}}}
+const authErr=e=>({'auth/invalid-credential':'Wrong email or password.','auth/email-already-in-use':'That email already has an account. Try logging in!','auth/weak-password':'Password needs at least 6 characters.','auth/invalid-email':'That email doesn’t look right.','auth/missing-password':'Type a password first.','auth/too-many-requests':'Too many tries. Wait a minute and try again.','auth/popup-blocked':'Allow pop-ups to sign in with Google.','auth/network-request-failed':'No internet connection.'})[e.code]||(e.message||'Something went wrong').replace('Firebase: ','');
+function authStep(mode){const inn=mode==='in';
+ const a=obShell(4,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div>
+ <button class="btn ghost wide gbtn" id="gg"><svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
+ <div class="or"><span>or</span></div>
+ <input class="name" id="em" type="email" placeholder="Email" autocomplete="email">
+ <div class="pwrap"><input class="name" id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="${inn?'current':'new'}-password"><button class="eye" id="eye" type="button" aria-label="Show password">👁️</button></div>
+ <p class="err" id="err"></p><button class="btn wide" id="go">${inn?'Log in':'Create account'}</button>
+ <div class="links"><button class="link" id="sw">${inn?'New here? Create an account':'Already have an account? Log in'}</button>${inn?'<button class="link" id="fp">Forgot password?</button>':''}</div>`,'',mode);
+ typeIn($('#bb'),inn?'Welcome back! Log in to keep your streak going.':`Last step, ${S.name}! Save your progress so you never lose your streak.`);
+ const err=(t,good)=>{const e=$('#err');if(!e)return;e.style.color=good?'var(--ok-d)':'';e.textContent=t;if(t&&!good){react('sad',a);gsap.fromTo(e,{x:-6},{x:0,duration:.4,ease:'elastic.out(1,.3)'})}};
+ if(!window.cloud)return err('Can’t reach the server. Check your internet and refresh.');
+ const busy=(id,on,label)=>{const b=$(id);if(b){b.disabled=on;if(label)b.textContent=label}};
+ $('#gg').onclick=()=>{SFX.tap();busy('#gg',true);err('');cloud.google().catch(x=>x.code!=='auth/popup-closed-by-user'&&x.code!=='auth/cancelled-popup-request'&&err(authErr(x))).finally(()=>busy('#gg',false))};
+ $('#go').onclick=()=>{SFX.tap();const em=$('#em').value.trim(),pw=$('#pw').value;
+  if(!em)return err('Type your email first.');if(!pw)return err('Type a password first.');
+  busy('#go',true,inn?'Logging in…':'Creating…');err('');
+  (inn?cloud.signIn(em,pw):cloud.signUp(em,pw)).catch(x=>{err(authErr(x));busy('#go',false,inn?'Log in':'Create account')})};
+ $('#em').onkeydown=e=>e.key==='Enter'&&$('#pw').focus();
+ $('#pw').onkeydown=e=>e.key==='Enter'&&$('#go').click();
+ $('#eye').onclick=()=>{const p=$('#pw');p.type=p.type==='password'?'text':'password';$('#eye').textContent=p.type==='password'?'👁️':'🙈'};
+ $('#sw').onclick=()=>{SFX.tap();onboard(4,inn?'up':'in')};
+ $('#fp')&&($('#fp').onclick=()=>{const em=$('#em').value.trim();if(!em)return err('Type your email first, then tap “Forgot password?”');cloud.reset(em).then(()=>err('Check your inbox for a reset link! 📬',true)).catch(x=>err(authErr(x)))})}
+
+/* ---------- lesson engine ---------- */
+let L=null,sel=null;
+const PRAISE=['Nicely done!','Awesome!','Great job!','You got it!','Excellent!','Bullseye! 🐂'];
+function openLesson(){const el=$('#lesson');el.hidden=false;
+ el.innerHTML=`<div class="lhead" id="lhead"><button class="x" id="quit" aria-label="Quit">✕</button><div class="bar"><i id="pb"></i></div><div class="lhearts" id="lh">${L?.practice?'❤️ ∞':'❤️ '+S.hearts}</div></div><div class="stage" id="stage"></div><div class="lfoot"><div><button class="btn" id="check" disabled>Check</button></div></div><div class="sheet" id="sheet"></div>`;
+ $('#quit').onclick=quitAsk;$('#stage').onclick=onStage;}
+function startLesson(id){regen();$$('.pop').forEach(p=>p.remove());
+ const practice=id==='practice',l=LESSON[id];
+ let items=practice?pickPractice():l.check?shuf(gradable(COURSE[l.ch].lessons)).slice(0,10):l.items;
+ L={id,practice,items,queue:[...items],total:items.length,done:0,right:0,wrong:0,combo:0,t0:Date.now(),retry:new Set()};
+ openLesson();
+ if(!practice&&S.hearts<=0)return noHearts();
+ next()}
+function bar(){gsap.to('#pb',{width:L.done/L.total*100+'%',duration:.5,ease:'power2.out'})}
+function next(){bar();$('#lhead').style.visibility='';gsap.set('#sheet',{yPercent:100,visibility:'hidden'});L.locked=false;
+ if(!L.queue.length)return finish();
+ L.cur=L.queue.shift();renderItem();}
+const talk=(t,s=100)=>`<div class="talk">${chip(s)}<div class="bubble">${t}</div></div>`;
+function renderItem(){const it=L.cur,st=$('#stage'),ck=$('#check');sel=null;
+ const pre=L.retry.has(it)?'<div class="tagline bad">↻ Previous mistake</div>':'';let h='';
+ ck.textContent='Check';ck.disabled=true;ck.onclick=check;
+ if(it.t==='info'){h=`<div class="tagline">💡 New idea</div><div class="art">${it.art}</div><h2 class="q c">${it.title}</h2>${talk(it.text)}`;ck.textContent='Continue';ck.disabled=false;ck.onclick=()=>{L.done++;SFX.tap();next()}}
+ if(it.t==='mc'){const o=shuf(it.opts),pics=it.tf||o.every(x=>x.e);
+  h=`${pre}<h2 class="q">${it.tf?'True or false?':'Select the correct answer'}</h2>${talk(it.q)}<div class="opts ${pics?'pics':''}">${(it.tf?it.opts:o).map((x,i)=>`<button class="opt" data-v="${esc(x.l)}"><kbd>${i+1}</kbd>${x.e?`<span class="oe">${x.e}</span>`:''}<span>${x.l}</span></button>`).join('')}</div>`}
+ if(it.t==='build')h=`${pre}<h2 class="q">Build the answer</h2>${talk(it.q)}<div class="line" id="line"></div><div class="bank" id="bank">${shuf([...it.answer.split(' '),...it.extra]).map((w,i)=>`<button class="chipw" data-i="${i}">${w}</button>`).join('')}</div>`;
+ if(it.t==='match'){L.m={l:null,r:null,left:it.pairs.length};h=`${pre}<h2 class="q">Tap the matching pairs</h2><div class="match"><div>${shuf(it.pairs.map((p,i)=>[p[0],i])).map(([t,i])=>`<button class="opt" data-s="l" data-k="${i}">${t}</button>`).join('')}</div><div>${shuf(it.pairs.map((p,i)=>[p[1],i])).map(([t,i])=>`<button class="opt" data-s="r" data-k="${i}">${t}</button>`).join('')}</div></div>`;$('.lfoot').style.visibility='hidden'}
+ else $('.lfoot').style.visibility='';
+ st.innerHTML=h;st.scrollTop=0;animateChips(st);
+ gsap.fromTo(st.children,{x:30,opacity:0},{x:0,opacity:1,duration:.35,stagger:.05,ease:'power2.out'});}
+function onStage(e){const b=e.target.closest('button');if(!b||L.locked)return;const it=L.cur;
+ if(it.t==='mc'&&b.classList.contains('opt')){SFX.tap();$$('.opt').forEach(x=>x.classList.toggle('sel',x===b));sel=b.dataset.v;$('#check').disabled=false;gsap.fromTo(b,{scale:.95},{scale:1,duration:.3,ease:'back.out(3)'})}
+ if(it.t==='build'){SFX.tap();const line=$('#line');
+  if(b.parentNode.id==='bank'&&!b.classList.contains('used')){const c=b.cloneNode(true),r=b.getBoundingClientRect();b.classList.add('used');line.appendChild(c);const r2=c.getBoundingClientRect();gsap.from(c,{x:r.left-r2.left,y:r.top-r2.top,duration:.3,ease:'power3.out'})}
+  else if(b.parentNode.id==='line'){$(`#bank [data-i="${b.dataset.i}"]`).classList.remove('used');b.remove()}
+  $('#check').disabled=!line.children.length}
+ if(it.t==='match'&&!b.classList.contains('gone')){SFX.tap();const m=L.m,s=b.dataset.s;
+  if(m[s])m[s].classList.remove('sel');m[s]=m[s]===b?null:b;b.classList.toggle('sel',!!m[s]);
+  if(m.l&&m.r){const[a,c]=[m.l,m.r];m.l=m.r=null;a.classList.remove('sel');c.classList.remove('sel');
+   if(a.dataset.k===c.dataset.k){SFX.ok();[a,c].forEach(x=>x.classList.add('good'));gsap.fromTo([a,c],{scale:1.08},{scale:1,duration:.4,ease:'back.out(3)',onComplete:()=>[a,c].forEach(x=>{x.classList.remove('good');x.classList.add('gone')})});
+    if(!--m.left)setTimeout(()=>{$('.lfoot').style.visibility='';result(true)},450)}
+   else{SFX.bad();L.matchMiss=1;[a,c].forEach(x=>x.classList.add('bad'));gsap.fromTo([a,c],{x:-6},{x:0,duration:.4,ease:'elastic.out(1,.3)',onComplete:()=>[a,c].forEach(x=>x.classList.remove('bad'))})}}}}
+const norm=s=>s.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+function check(){const it=L.cur;
+ if(it.t==='mc')result(sel===it.ans,it.ans);
+ if(it.t==='build')result(norm($$('#line .chipw').map(b=>b.textContent).join(' '))===norm(it.answer),it.answer)}
+function result(ok,ans){const it=L.cur;L.locked=true;mark(it.tag,ok);
+ if(it.t==='mc')$$('.opt').forEach(x=>{if(x.dataset.v===it.ans)x.classList.add('good');else if(x.classList.contains('sel'))x.classList.add('bad');x.classList.remove('sel')});
+ if(ok){L.right++;L.done++;L.combo++;SFX.ok();react('happy');if(L.combo>=3)toast(`🔥 ${L.combo} in a row!`)}
+ else{L.wrong++;L.combo=0;L.queue.push(it);L.retry.add(it);SFX.bad();react('sad');gsap.fromTo('.opt.bad,#line',{x:-8},{x:0,duration:.5,ease:'elastic.out(1,.3)'});
+  if(!L.practice){if(S.hearts===5)S.heartsAt=Date.now();S.hearts=Math.max(0,S.hearts-1);$('#lh').textContent='❤️ '+S.hearts;gsap.fromTo('#lh',{scale:1.5},{scale:1,duration:.5,ease:'back.out(3)'})}}
+ save();bar();
+ const s=$('#sheet');s.className='sheet '+(ok?'good':'bad');
+ s.innerHTML=`<div class="sin"><div class="sico">${ok?'✓':'✕'}</div><div class="stxt"><h3>${ok?pick(PRAISE):'Correct answer:'}</h3>${ok?`<p>${it.why||''}</p>`:`<p><b>${esc(ans)}</b></p><p class="why">${it.why||''}</p>`}</div><button class="btn ${ok?'':'red'}" id="cont">Continue</button></div>`;
+ gsap.fromTo(s,{y:0,yPercent:100,visibility:'visible'},{yPercent:0,duration:.35,ease:'back.out(1.3)'});
+ $('#cont').onclick=()=>{SFX.tap();(!L.practice&&S.hearts<=0)?noHearts():next()}}
+function toast(t){const d=document.createElement('div');d.className='combo';d.textContent=t;$('#lesson').appendChild(d);gsap.timeline({onComplete:()=>d.remove()}).from(d,{scale:0,duration:.4,ease:'back.out(3)'}).to(d,{y:-20,opacity:0,delay:1,duration:.4})}
+function quitAsk(){if(!L||L.finished)return closeLesson();const m=document.createElement('div');m.className='modal';
+ m.innerHTML=`<div>${chip(120)}<h2>Wait, don’t go!</h2><p class="muted">You’ll lose your progress in this lesson.</p><button class="btn wide" id="stay">Keep learning</button><button class="btn ghost wide" id="leave" style="color:var(--bad)">End session</button></div>`;
+ $('#lesson').appendChild(m);animateChips(m);react('sad',m);gsap.from(m.firstChild,{yPercent:100,duration:.35,ease:'power3.out'});
+ $('#stay').onclick=()=>m.remove();$('#leave').onclick=closeLesson}
+function closeLesson(){$('#lesson').hidden=true;$('#lesson').innerHTML='';L=null;go('learn')}
+function noHearts(){regen();L.locked=true;$('#sheet').innerHTML='';$('#lhead').style.visibility='hidden';gsap.set('#sheet',{yPercent:100,visibility:'hidden'});$('.lfoot').style.visibility='';
+ $('#stage').innerHTML=`<div class="fin">${chip(160)}<h1 class="bad">You ran out of hearts</h1><p>Next heart in ${nextHeartMin()} min. Refill now, or practice to earn hearts back!</p><button class="btn" id="refill" ${S.coins<50?'disabled':''}>Refill ❤️ for ${COIN} 50</button><button class="btn ghost" id="prac">Practice</button></div>`;
+ animateChips($('#stage'));react('sad');const ck=$('#check');ck.disabled=false;ck.textContent='No thanks';ck.onclick=closeLesson;
+ $('#refill').onclick=()=>{S.coins-=50;S.hearts=5;save();SFX.coin();$('#lh').textContent='❤️ 5';L.queue.length?next():startLesson(L.id)};
+ $('#prac').onclick=()=>Object.keys(S.done).length?startLesson('practice'):($('#prac').textContent='Finish a lesson first')}
+function finish(){L.finished=true;const perfect=L.wrong===0&&!L.matchMiss,repeat=!L.practice&&S.done[L.id],chk=!L.practice&&LESSON[L.id].check;
+ const xp=repeat?5:10+(chk?5:0)+(perfect?5:0),coins=5+(perfect?5:0),acc=Math.round(L.right/Math.max(1,L.right+L.wrong)*100),sec=Math.round((Date.now()-L.t0)/1e3);
+ S.xp+=xp;S.coins+=coins;S.lessons++;if(perfect)S.perfects++;if(L.practice)S.hearts=Math.min(5,S.hearts+1);
+ S.daily=S.daily.day===day()?{day:day(),xp:S.daily.xp+xp}:{day:day(),xp};
+ const streakUp=S.lastDay!==day();if(streakUp){S.streak=S.lastDay===day(-1)?S.streak+1:1;S.lastDay=day();S.days=[...new Set([...S.days,day()])].slice(-30);S.best=Math.max(S.best,S.streak)}
+ const lc=!L.practice&&LESSON[L.id],jumping=chk&&!repeat&&!COURSE[lc.ch].lessons.every(x=>x.check||S.done[x.id]),jumpFail=jumping&&L.wrong>2;
+ if(!L.practice&&!repeat&&!jumpFail){S.done[L.id]=1;if(jumping)COURSE[lc.ch].lessons.forEach(x=>S.done[x.id]=1);justDone=L.id}save();$('#sheet').innerHTML='';
+ $('#lhead').style.visibility='hidden';$('.lfoot').style.visibility='';gsap.set('#sheet',{yPercent:100,visibility:'hidden'});
+ const st=$('#stage');st.innerHTML=`<div class="fin">${chip(170)}<h1>${jumpFail?'So close!':jumping?'Chapter skipped! 🚀':L.practice?'Practice complete!':perfect?'Perfect lesson!':'Lesson complete!'}</h1><p>${jumpFail?`You made ${L.wrong} mistakes. You need 2 or fewer to skip ahead. Keep going from the start of the chapter!`:jumping?'You already know this stuff. On to the next chapter!':perfect?'Not a single mistake. You’re a natural! 🐂':'You’re getting smarter about money every day!'}</p>
+ <div class="stats"><div class="sc" style="--c:var(--gold)"><b>TOTAL XP</b><div>⚡ <span data-n="${xp}">0</span></div></div><div class="sc" style="--c:var(--ok)"><b>${acc>=90?'AMAZING':'GOOD'}</b><div>🎯 <span data-n="${acc}">0</span>%</div></div><div class="sc" style="--c:var(--sky)"><b>${sec<120?'SPEEDY':'TIME'}</b><div>⏱ ${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}</div></div></div>
+ <div class="earn">+${coins} ${COIN} ${L.practice?' +1 ❤️':''}</div></div>`;
+ animateChips(st);SFX.win();confetti();react('happy');
+ gsap.from('.fin h1,.fin p',{y:20,opacity:0,stagger:.1,duration:.4});gsap.from('.sc',{y:40,opacity:0,stagger:.12,delay:.3,duration:.5,ease:'back.out(2)'});gsap.from('.earn',{scale:0,delay:1,duration:.5,ease:'back.out(3)'});
+ $$('[data-n]',st).forEach(el=>{const o={v:0};gsap.to(o,{v:+el.dataset.n,duration:1,delay:.6,ease:'power1.out',onUpdate:()=>el.textContent=Math.round(o.v)})});
+ const ck=$('#check');ck.disabled=false;ck.textContent='Continue';ck.onclick=()=>streakUp?streakScreen():closeLesson()}
+function streakScreen(){const st=$('#stage'),n=S.streak,days=[...Array(7)].map((_,i)=>day(i-6));
+ st.innerHTML=`<div class="fin"><div class="flame">🔥</div><div class="bign" id="sn">${n-1}</div><h1 class="fire">day streak!</h1><div class="week">${days.map(d=>`<div>${new Date(d+'T00:00').toLocaleDateString(undefined,{weekday:'narrow'})}<i class="${S.days.includes(d)?'on':''}">${S.days.includes(d)?'✓':''}</i></div>`).join('')}</div><p>${n>1?'You’re on fire! Come back tomorrow to keep it going.':'Your streak has begun! Practice each day to grow it.'}</p></div>`;
+ gsap.from('.flame',{scale:0,rotation:-30,duration:.8,ease:'elastic.out(1,.4)'});gsap.to('.flame',{scale:1.08,duration:.6,repeat:-1,yoyo:true,ease:'sine.inOut',delay:.8});
+ gsap.timeline({delay:.5}).to('#sn',{y:-30,opacity:0,duration:.2,onComplete:()=>{const e=$('#sn');if(e){e.textContent=n;SFX.win()}}}).fromTo('#sn',{y:30,opacity:0},{y:0,opacity:1,duration:.4,ease:'back.out(3)'});
+ gsap.from('.week i.on',{scale:0,stagger:.08,delay:.8,duration:.4,ease:'back.out(3)'});
+ $('#check').onclick=closeLesson}
+
+addEventListener('resize',()=>{if(tab==='learn'&&$('.path')){$$('.trail').forEach(t=>t.remove());drawTrails()}});
+/* keyboard */
+document.addEventListener('keydown',e=>{if($('#lesson').hidden)return;
+ if(e.key==='Enter'){e.preventDefault();const c=$('#cont');(c&&L?.locked&&!$('.modal')?c:$('#check'))?.click?.()}
+ const n=+e.key;if(n&&L?.cur?.t==='mc'&&!L.locked)$$('#stage .opt')[n-1]?.click()});
+setInterval(()=>{if(S.hearts<5&&$('#lesson').hidden&&S.name){const h=S.hearts;regen();if(h!==S.hearts){save();go()}}},60e3);
+/* ---------- auth boot ---------- */
+let authed=false;
+window.onAuth=async u=>{flush();authed=true;user=u;syncOK=false;
+ if(u){let r=null;try{r=await cloud.load(u.uid);syncOK=true}catch(e){console.error(e)}
+  if(r)S={...blank(),...Object.fromEntries(Object.keys(DEF).filter(k=>r[k]!==undefined).map(k=>[k,r[k]]))};
+  else if(!S.name)S.name=(u.displayName||'').split(' ')[0];
+  save()}
+ else S=blank();
+ go('learn')};
+$('#app').innerHTML=`<div class="boot">${chip(160)}</div>`;animateChips($('#app'));
+setTimeout(()=>{if(!authed){authed=true;go('learn')}},6000); // offline fallback
+</script>
+<script type="module">
+const V='https://www.gstatic.com/firebasejs/11.0.2/';
+const [{initializeApp},A,F]=await Promise.all(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].map(f=>import(V+f)));
+const app=initializeApp(window.FIREBASE_CONFIG),auth=A.getAuth(app),db=F.getFirestore(app);
+window.cloud={
+ google:()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()),
+ signUp:(e,p)=>A.createUserWithEmailAndPassword(auth,e,p),
+ signIn:(e,p)=>A.signInWithEmailAndPassword(auth,e,p),
+ reset:e=>A.sendPasswordResetEmail(auth,e),
+ signOut:()=>A.signOut(auth),
+ load:uid=>F.getDoc(F.doc(db,'users',uid)).then(s=>s.exists()?s.data():null),
+ // mergeFields: replace app fields wholesale (so maps can shrink) but keep server-owned fields like `mail`
+ save:(uid,d)=>F.setDoc(F.doc(db,'users',uid),d,{mergeFields:Object.keys(d)})};
+A.onAuthStateChanged(auth,u=>window.onAuth(u));
+</script>
+</body>
+</html>
