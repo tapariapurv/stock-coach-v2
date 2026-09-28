@@ -473,7 +473,7 @@ function onboard(step=0,mode='up'){loops.forEach(x=>x.kill());loops=[];const a=$
  if(step===4)return authStep(mode);
  if(step===1){obShell(1,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><input class="name" id="nm" maxlength="20" placeholder="Your first name" autocomplete="off" value="${esc(S.name)}"><p class="muted" style="margin-top:10px;font-size:14px">Just your first name, no last names!</p>`,'Continue');
   const nx=$('#nx'),nm=$('#nm');typeIn($('#bb'),'Hi there! I’m Chip 🐂 What should I call you?');
-  const upd=()=>nx.disabled=!nm.value.trim();upd();nm.focus();nm.oninput=upd;nm.onkeydown=e=>e.key==='Enter'&&!nx.disabled&&nx.click();
+  const upd=()=>nx.disabled=!nm.value.trim();upd();nm.focus();nm.oninput=upd;nm.onkeydown=e=>{if(e.key==='Enter')!nx.disabled&&nx.click()};
   nx.onclick=()=>{SFX.tap();S.name=nm.value.trim();onboard(2)};return}
  if(step===2){obShell(2,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><div class="opts">${LEVELS.map(([e,n],i)=>`<button class="opt ${S.level===i?'sel':''}" data-l="${i}"><span class="oe sm">${e}</span><b>${n}</b></button>`).join('')}</div>`,'Continue');
   typeIn($('#bb'),`Nice to meet you, ${S.name}! How much do you know about stocks?`);
@@ -501,8 +501,8 @@ function authStep(mode){const inn=mode==='in';
   if(!em)return err('Type your email first.');if(!pw)return err('Type a password first.');
   busy('#go',true,inn?'Logging in…':'Creating…');err('');
   (inn?cloud.signIn(em,pw):cloud.signUp(em,pw)).catch(x=>{err(authErr(x));busy('#go',false,inn?'Log in':'Create account')})};
- $('#em').onkeydown=e=>e.key==='Enter'&&$('#pw').focus();
- $('#pw').onkeydown=e=>e.key==='Enter'&&$('#go').click();
+ $('#em').onkeydown=e=>{if(e.key==='Enter')$('#pw').focus()};
+ $('#pw').onkeydown=e=>{if(e.key==='Enter')$('#go').click()};
  $('#eye').onclick=()=>{const p=$('#pw');p.type=p.type==='password'?'text':'password';$('#eye').textContent=p.type==='password'?'👁️':'🙈'};
  $('#sw').onclick=()=>{SFX.tap();onboard(4,inn?'up':'in')};
  $('#fp')&&($('#fp').onclick=()=>{const em=$('#em').value.trim();if(!em)return err('Type your email first, then tap “Forgot password?”');cloud.reset(em).then(()=>err('Check your inbox for a reset link! 📬',true)).catch(x=>err(authErr(x)))})}
@@ -603,7 +603,8 @@ document.addEventListener('keydown',e=>{if($('#lesson').hidden)return;
 setInterval(()=>{if(S.hearts<5&&$('#lesson').hidden&&S.name){const h=S.hearts;regen();if(h!==S.hearts){save();go()}}},60e3);
 /* ---------- auth boot ---------- */
 let authed=false;
-window.onAuth=async u=>{flush();authed=true;user=u;syncOK=false;
+window.onAuth=async u=>{if(!u&&!user&&authed)return; // late 'still signed out' after the offline fallback: don't wipe what the kid is typing
+ flush();authed=true;user=u;syncOK=false;
  if(u){let r=null;try{r=await cloud.load(u.uid);syncOK=true}catch(e){console.error(e)}
   if(r)S={...blank(),...Object.fromEntries(Object.keys(DEF).filter(k=>r[k]!==undefined).map(k=>[k,r[k]]))};
   else if(!S.name)S.name=(u.displayName||'').split(' ')[0];

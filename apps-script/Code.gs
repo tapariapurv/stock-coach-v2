@@ -1,6 +1,6 @@
 // Chip streak emails. Runs hourly; reads users/* from Firestore and sends at most one email per user per run.
 const PROJECT = 'chip-stocks';
-const APP_URL = 'https://chip-stocks.web.app';
+const APP_URL = 'https://chip-stock-coach.vercel.app';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
 const MILESTONES = [3, 7, 14, 30, 50, 100, 365];
 

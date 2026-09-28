@@ -1,2 +1,14 @@
+# OS / editor
 .DS_Store
+.vscode/
+.idea/
+
+# Firebase CLI cache & logs
 .firebase/
+*.log
+
+# Env / secrets
+.env*
+
+# Vercel CLI link
+.vercel/
