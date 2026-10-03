@@ -5,5 +5,12 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+    // Public profile (name, avatar, XP, following) so friends can find and rank each other.
+    match /profiles/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.username is string && request.resource.data.username.size() <= 20
+        && request.resource.data.following is list && request.resource.data.following.size() <= 200;
+    }
   }
 }

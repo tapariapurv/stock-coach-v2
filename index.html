@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="firebase-config.js"></script>
+<script src="chapters.js"></script>
 <style>
 /* Chip design system: indigo brand, caramel mascot, mint = correct, coral = wrong, gold = coins/progress */
 :root{--pri:#5B4CF5;--pri-d:#4031D4;--pri2:#8B5CF6;--pri-l:#EFEDFF;--pri-b:#C9C2FF;
@@ -209,6 +210,16 @@ input.name:focus{border-color:var(--pri-b);box-shadow:0 0 0 4px var(--pri-l)}
 .pwrap{position:relative}.pwrap .name{padding-right:54px}.eye{position:absolute;right:10px;top:8px;font-size:20px;padding:8px;opacity:.7}
 .links{display:grid;justify-items:center;gap:2px;margin-top:10px}.err{color:var(--bad);min-height:22px;font-size:15px;margin:6px 0}.link{color:var(--pri);font-weight:800;padding:6px}
 .gbtn{color:var(--ink)!important}
+[data-theme=dark]{--ink:#ECEAF7;--ink2:#B4B1C9;--mute:#7D7A93;--line:#34314A;--soft:#2A2740;--bg:#17152A;--card:#211F35;--pri-l:#2E2A55;--gold-l:#3A3020;--ok-l:#173A2E;--bad-l:#3F1F28;--sh:0 10px 30px -12px rgba(0,0,0,.6)}
+[data-theme=dark] .hero{background:linear-gradient(135deg,var(--pri-l),#3A2A2A)}
+.av{font-size:58px;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:3px solid var(--pri-b);flex:none}
+.avs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.avs button,.accs button{font-size:28px;width:48px;height:48px;border-radius:14px;border:2px solid var(--line);background:var(--soft)}.avs button.sel,.accs button.sel{border-color:var(--pri);background:var(--pri-l)}
+.accs{display:flex;gap:8px}.accs button{width:34px;height:34px;border-radius:50%}
+textarea.name{resize:none;height:84px}.modal label{width:100%;text-align:left;font-size:14px;color:var(--ink2)}
+.fr{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:2px solid var(--line)}.fr:last-child{border:0}.fr .rk{width:26px;color:var(--mute)}.fr .fa{font-size:30px}.fr div{flex:1}.fr .btn{min-width:96px;font-size:15px;padding:9px 12px}.fr.me{background:var(--pri-l);margin:0 -18px;padding:12px 18px}
+.quest{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:2px solid var(--line)}.quest:last-child{border:0}.quest>span{font-size:30px}.quest>div{flex:1}.quest .btn{min-width:92px;font-size:15px;padding:9px 12px}
+.srow{display:flex;gap:8px;margin:6px 0 4px}.srow .name{flex:1}.srow .btn{min-width:110px}
+@media(max-width:820px){.nav button{padding:6px 2px;flex:1;min-width:0}}
 </style>
 </head>
 <body>
@@ -293,20 +304,22 @@ const COURSE=[
   M('The market drops for a week. What might a patient investor do?',['🧘|Stay calm, think long-term','😱|Panic and sell everything','🙈|Throw away the computer','🍦|Only eat ice cream'],0,'Short dips are normal over the long run.','long'),
   P([['Snowball','Compound growth'],['Turtle','Patience'],['Basket','Diversify'],['Ticker','Stock nickname']],'long')]},
  {title:'Chapter Review',check:1}]}];
+{const m=MORE_CHAPTERS(I,M,T,B,P);Object.assign(TAGS,m.tags);COURSE.push(...m.chapters)}
 const FLAT=[];COURSE.forEach((c,ci)=>c.lessons.forEach((l,li)=>{l.id=`c${ci+1}l${li+1}`;l.ch=ci;FLAT.push(l)}));
 const LESSON=Object.fromEntries(FLAT.map(l=>[l.id,l]));
 
 /* ---------- state ---------- */
 const KEY='chip-stocks-v1',REGEN=20*60e3;
 const day=(o=0)=>{const d=new Date();d.setDate(d.getDate()+o);return d.toLocaleDateString('en-CA')};
-const DEF={name:'',goal:20,xp:0,coins:60,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],done:{},mastery:{},daily:{day:'',xp:0},owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day()};
+const DEF={name:'',goal:20,xp:0,coins:60,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],done:{},mastery:{},daily:{day:'',xp:0},owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day(),username:'',bio:'',avatar:'🐂',theme:'light',accent:0,friends:[],freezes:0,boostUntil:0,week:{id:'',xp:0},quests:{day:'',xp:0,lessons:0,perfects:0,claimed:[]}};
 const blank=()=>({...structuredClone(DEF),heartsAt:Date.now(),joined:day()});
 let S;try{S={...blank(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{S=blank()}
 let user=null,syncOK=false,syncT,pending=null;
 // debounced cloud write; the snapshot is bound to its uid so a sign-out/sign-in can never cross accounts
-const flush=()=>{clearTimeout(syncT);if(pending){const[uid,d]=pending;pending=null;cloud.save(uid,d).catch(console.error)}};
+const flush=()=>{clearTimeout(syncT);if(pending){const[uid,d,pb]=pending;pending=null;cloud.save(uid,d).catch(console.error);cloud.saveProfile(uid,pb).catch(console.error)}};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch{}
- if(user&&syncOK){pending=[user.uid,{...structuredClone(S),email:user.email,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,updatedAt:Date.now()}];clearTimeout(syncT);syncT=setTimeout(flush,800)}};
+ if(user&&syncOK){pending=[user.uid,{...structuredClone(S),email:user.email,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,updatedAt:Date.now()},pub()];clearTimeout(syncT);syncT=setTimeout(flush,800)}};
+const pub=()=>({username:S.username,name:S.name,avatar:S.avatar,bio:S.bio,xp:S.xp,streak:streakNow(),weekId:S.week.id,weekXp:S.week.xp,following:S.friends,updatedAt:Date.now()});
 addEventListener('pagehide',flush);
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>`&#${c.charCodeAt(0)};`);
@@ -314,6 +327,14 @@ const shuf=a=>a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
 const pick=a=>a[Math.random()*a.length|0];
 const streakNow=()=>[day(),day(-1)].includes(S.lastDay)?S.streak:0;
 const dailyXP=()=>S.daily.day===day()?S.daily.xp:0;
+const wk=()=>{const d=new Date();d.setDate(d.getDate()-(d.getDay()+6)%7);return d.toLocaleDateString('en-CA')};
+const weekXP=()=>S.week.id===wk()?S.week.xp:0;
+const boosted=()=>Date.now()<S.boostUntil;
+const Q=()=>S.quests.day===day()?S.quests:(S.quests={day:day(),xp:0,lessons:0,perfects:0,claimed:[]});
+// streak freezes quietly cover missed days (one freeze per day) the next time the app opens
+function useFreeze(){if(!S.lastDay||S.lastDay>=day(-1)||!S.streak)return;const miss=Math.round((new Date(day(-1))-new Date(S.lastDay))/864e5);if(miss<=S.freezes){S.freezes-=miss;S.lastDay=day(-1);save()}}
+const ACCENTS=[['#5B4CF5','#4031D4','#8B5CF6'],['#10B981','#0A9467','#34D399'],['#1FA2FF','#0B84DB','#60C3FF'],['#FF5470','#DE3355','#FF8FA3'],['#FF7A1A','#D95F08','#FFB31A']];
+function applyTheme(){const r=document.documentElement,a=ACCENTS[S.accent]||ACCENTS[0],dk=S.theme==='dark'||S.theme==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dk?'dark':'light';[['--pri',a[0]],['--pri-d',a[1]],['--pri2',a[2]]].forEach(([k,v])=>r.style.setProperty(k,v))}
 function regen(){if(S.hearts>=5){S.heartsAt=Date.now();return}const n=Math.floor((Date.now()-S.heartsAt)/REGEN);if(n>0){S.hearts=Math.min(5,S.hearts+n);S.heartsAt+=n*REGEN}}
 const nextHeartMin=()=>Math.ceil((REGEN-(Date.now()-S.heartsAt))/60e3);
 const curLesson=()=>FLAT.find(l=>!S.done[l.id])?.id;
@@ -354,8 +375,12 @@ function chip(size=140,wear=S.wear){const w=k=>wear.includes(k);return `<svg cla
   <path d="M86 127Q100 139 114 127" stroke="#8A4A1E" stroke-width="4" fill="none" stroke-linecap="round"/>
   ${w('shades')?'<g fill="#1d1d1d"><rect x="60" y="72" width="36" height="22" rx="9"/><rect x="104" y="72" width="36" height="22" rx="9"/><rect x="94" y="78" width="12" height="4"/><rect x="66" y="76" width="10" height="4" fill="#fff" opacity=".5"/></g>':''}
   ${w('hat')?'<g><rect x="60" y="38" width="80" height="11" rx="5" fill="#2B2B3A"/><rect x="73" y="0" width="54" height="42" rx="6" fill="#2B2B3A"/><rect x="73" y="28" width="54" height="8" fill="#FF4B4B"/></g>':''}
+  ${w('monocle')?'<g><circle cx="122" cy="83" r="17" fill="#fff" fill-opacity=".25" stroke="#E5A500" stroke-width="4"/><path d="M138 90Q146 120 140 150" stroke="#E5A500" stroke-width="2" fill="none"/></g>':''}
+  ${w('phones')?'<g><path d="M44 92Q44 30 100 30Q156 30 156 92" stroke="#2B2B3A" stroke-width="9" fill="none"/><rect x="30" y="80" width="22" height="36" rx="10" fill="#FF5470"/><rect x="148" y="80" width="22" height="36" rx="10" fill="#FF5470"/></g>':''}
+  ${w('party')?'<g><path d="M76 46L100 -2L124 46Z" fill="#1FA2FF"/><path d="M85 28L115 28M80 38L120 38" stroke="#FFC800" stroke-width="5"/><circle cx="100" cy="-2" r="7" fill="#FF5470"/></g>':''}
   ${w('crown')?'<path d="M68 46L72 14L87 30L100 6L113 30L128 14L132 46Z" fill="#FFC800" stroke="#E5A500" stroke-width="3" stroke-linejoin="round"/>':''}
  </g>
+ ${w('scarf')?'<g><path d="M56 136Q100 158 144 136L146 150Q100 172 54 150Z" fill="#FF5470"/><rect x="112" y="146" width="16" height="34" rx="6" fill="#DE3355"/></g>':''}
  ${w('tie')?'<g><path d="M100 152L78 140V164ZM100 152L122 140V164Z" fill="#5B4CF5"/><circle cx="100" cy="152" r="7" fill="#4031D4"/></g>':''}
 </g></svg>`}
 let loops=[];
@@ -374,12 +399,12 @@ const ICO={star:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5l2
 
 /* ---------- app shell ---------- */
 let tab='learn',justDone=null;
-const TABS=[['learn','🏠','Learn'],['practice','🎯','Practice'],['shop','🛍️','Shop'],['profile','🐂','Profile']];
-function go(t=tab){tab=t;regen();loops.forEach(x=>x.kill());loops=[];
+const TABS=[['learn','🏠','Learn'],['practice','🎯','Practice'],['league','🏆','Leagues'],['quests','📜','Quests'],['shop','🛍️','Shop'],['profile','🐂','Profile']];
+function go(t=tab){tab=t;regen();applyTheme();useFreeze();loops.forEach(x=>x.kill());loops=[];
  if(!S.name)return onboard(user?1:0);
  $('#app').innerHTML=`<div class="shell"><nav class="nav"><div class="logo">${chip(40)}chip</div>${TABS.map(([k,e,n])=>`<button data-tab="${k}" class="${k===tab?'on':''}" aria-label="${n}"><span>${e}</span><b>${n}</b></button>`).join('')}</nav>
- <main><div class="top"><div class="stat crs">📈 Stocks</div><div class="stat fire ${S.lastDay===day()?'':'off'}" title="Day streak">🔥 ${streakNow()}</div><div class="stat coin" title="Coins">${COIN} ${S.coins}</div><div class="stat heart" title="Hearts">❤️ ${S.hearts}</div></div>${({learn,practice,shop,profile})[tab]()}</main>
- <aside class="side">${goalCard()}${skillsCard()}</aside></div>`;
+ <main><div class="top"><div class="stat crs">📈 Stocks</div><div class="stat fire ${S.lastDay===day()?'':'off'}" title="Day streak">🔥 ${streakNow()}</div>${boosted()?'<div class="stat" title="Double XP active">⚡2x</div>':''}${S.freezes?`<div class="stat" title="Streak freezes">🧊 ${S.freezes}</div>`:''}<div class="stat coin" title="Coins">${COIN} ${S.coins}</div><div class="stat heart" title="Hearts">❤️ ${S.hearts}</div></div>${({learn,practice,league,quests,shop,profile})[tab]()}</main>
+ <aside class="side">${goalCard()}${questCard(1)}${skillsCard()}</aside></div>`;
  $$('[data-tab]').forEach(b=>b.onclick=()=>{SFX.tap();go(b.dataset.tab);scrollTo(0,0)});
  animateChips($('#app'));
  gsap.from('main > :not(.top)',{y:16,opacity:0,duration:.4,stagger:.05,ease:'power2.out'});
@@ -389,7 +414,24 @@ function go(t=tab){tab=t;regen();loops.forEach(x=>x.kill());loops=[];
 function goalCard(){const x=dailyXP(),p=Math.min(100,x/S.goal*100);return `<div class="card"><h3>Daily Goal</h3><div class="goal"><span>⚡</span><div class="gbar"><i style="width:${p}%"></i><em>${x} / ${S.goal} XP</em></div><span>${p>=100?'🎉':'🎁'}</span></div></div>`}
 function skillsCard(){const t=Object.keys(S.mastery);return `<div class="card"><h3>Your Skills</h3>${t.length?t.map(k=>{const s=strength(k);return `<div class="skill"><b>${TAGS[k]}</b><div class="sbar"><i style="width:${Math.max(6,s*100)}%;background:${s>.6?'var(--ok)':s>.2?'var(--gold)':'var(--bad)'}"></i></div></div>`}).join(''):'<p class="muted" style="margin-top:8px">Finish a lesson to see your skills grow!</p>'}</div>`}
 
-/* learn */
+/* quests */
+const QUESTS=[['xp','⚡','Earn 30 XP',30,15],['lessons','📚','Complete 2 lessons',2,15],['perfects','💎','Get a perfect lesson',1,20]];
+function questCard(mini){const q=Q();return `<div class="card"><h3>Daily Quests</h3>${QUESTS.map(([k,e,n,m,r])=>{const v=Math.min(q[k],m),got=q.claimed.includes(k);return `<div class="quest"><span>${e}</span><div><b>${n}</b><div class="sbar"><i style="width:${Math.max(4,v/m*100)}%;background:var(--gold)"></i></div><small class="muted">${v} / ${m}</small></div>${mini?(got?'✅':v>=m?'🎁':''):got?'<button class="btn ghost" disabled>Claimed</button>':`<button class="btn gold" data-claim="${k}" ${v<m?'disabled':''}>${COIN} ${r}</button>`}</div>`}).join('')}</div>`}
+function quests(){return `<div class="pagehead"><div><h1>Quests</h1><p class="muted">New quests every day · claim chests for coins</p></div></div>${questCard()}
+ <div class="card" style="margin-top:16px"><h3>Weekly XP</h3><p style="font-size:28px;margin-top:6px">⚡ ${weekXP()}</p><p class="muted">Resets every Monday. Compete with friends in Leagues!</p></div>`}
+function claim(k){const q=Q(),x=QUESTS.find(z=>z[0]===k);if(!x||q.claimed.includes(k)||q[k]<x[3])return;q.claimed.push(k);S.coins+=x[4];save();SFX.coin();go()}
+
+/* leagues & friends */
+let FR=null; // cached friend profiles for this session
+function league(){if(!user)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Sign in to add friends</h2><p class="muted">Follow friends and race them on the weekly leaderboard.</p></div></div>`;
+ if(!S.username)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Pick a username first</h2><p class="muted">Friends find you by username.</p><button class="btn" id="setU" style="margin-top:10px">Edit profile</button></div></div>`;
+ const me={uid:user.uid,...pub(),me:1},rows=[me,...(FR||[]).filter(f=>f.uid!==user.uid)].map(f=>({...f,w:f.weekId===wk()?f.weekXp:0})).sort((a,b)=>b.w-a.w);
+ return `<div class="pagehead"><div><h1>Weekly League</h1><p class="muted">Ranked by XP this week · you are @${esc(S.username)}</p></div></div>
+ <div class="card"><h3>Add friends</h3><div class="srow"><input class="name" id="fq" placeholder="Search username" autocomplete="off"><button class="btn" id="fgo">Follow</button></div><p class="err" id="ferr"></p></div>
+ <div class="list" style="margin-top:16px">${FR?rows.map((f,i)=>`<div class="fr ${f.me?'me':''}"><b class="rk">${['🥇','🥈','🥉'][i]||i+1}</b><span class="fa">${esc(f.avatar||'🐂')}</span><div><b>${esc(f.name||f.username)}</b><br><small class="muted">@${esc(f.username)} · 🔥 ${f.streak||0}</small></div><b>${f.w} XP</b>${f.me?'':`<button class="btn ghost" data-unf="${f.uid}">Unfollow</button>`}</div>`).join(''):'<p class="muted" style="padding:16px 0">Loading friends…</p>'}</div>
+ <p class="muted" style="margin-top:12px">${S.friends.length} following · <span id="fols">… followers</span></p>`}
+async function loadFriends(){try{FR=await cloud.profiles(S.friends)}catch(e){console.error(e);FR=[]}if(tab==='league')go()}
+
 const OFF=[0,52,78,52,0,-52,-78,-52];
 const canJump=(l,cur)=>l.check&&S.level>0&&!S.done[l.id]&&LESSON[cur]?.ch===l.ch;
 function learn(){const cur=curLesson();return COURSE.map((ch,ci)=>`<section class="unit"><div class="banner" style="--c:${ch.color};--c2:${ch.c2}"><div><small>CHAPTER ${ci+1}</small><h2>${ch.title}</h2><p>${ch.sub}</p><div class="bprog"><i><b style="width:${ch.lessons.filter(l=>S.done[l.id]).length/ch.lessons.length*100}%"></b></i>${ch.lessons.filter(l=>S.done[l.id]).length} / ${ch.lessons.length}</div></div><div class="bicon">${ch.icon}</div></div>
@@ -412,9 +454,17 @@ const bind={learn(){$$('.node').forEach(n=>n.onclick=e=>{e.stopPropagation();SFX
   n.parentNode.appendChild(p);gsap.from(p,{scale:.7,opacity:0,y:-10,duration:.35,ease:'back.out(2)'});
   if(st!=='lock')p.querySelector('.btn').onclick=()=>startLesson(l.id)});
  document.onclick=()=>$$('.pop').forEach(p=>p.remove())},
+ league(){$('#setU')&&($('#setU').onclick=editProfile);if(!user||!S.username)return;if(!FR)loadFriends();
+  cloud.followers(user.uid).then(n=>{const e=$('#fols');if(e)e.textContent=n+' followers'}).catch(()=>{});
+  const fq=$('#fq'),err=$('#ferr');fq.onkeydown=e=>e.key==='Enter'&&$('#fgo').click();
+  $('#fgo').onclick=async()=>{const u=fq.value.trim().toLowerCase().replace(/^@/,'');if(!u)return;err.textContent='';
+   try{const f=await cloud.findUser(u);if(!f)return err.textContent='No one with that username.';if(f.uid===user.uid)return err.textContent='That’s you! 🐂';if(S.friends.includes(f.uid))return err.textContent='Already following.';
+    S.friends=[...S.friends,f.uid];FR=[...(FR||[]),f];save();SFX.coin();go()}catch(e){console.error(e);err.textContent='Couldn’t search right now.'}};
+  $$('[data-unf]').forEach(b=>b.onclick=()=>{S.friends=S.friends.filter(x=>x!==b.dataset.unf);FR=FR.filter(f=>f.uid!==b.dataset.unf);save();go()})},
+ quests(){$$('[data-claim]').forEach(b=>b.onclick=()=>claim(b.dataset.claim))},
  practice(){$('#goP')&&($('#goP').onclick=()=>startLesson('practice'))},
  shop(){$$('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy))},
- profile(){$('#snd').onclick=()=>{S.sound=!S.sound;save();go()};$('#so').onclick=()=>window.cloud?.signOut();$('#emo').onclick=()=>{S.emailOptIn=!S.emailOptIn;save();go()};$('#gl').onclick=()=>{const g=[10,20,30,50];S.goal=g[(g.indexOf(S.goal)+1)%4];save();go()};
+ profile(){$('#snd').onclick=()=>{S.sound=!S.sound;save();go()};$('#so').onclick=()=>window.cloud?.signOut();$('#emo').onclick=()=>{S.emailOptIn=!S.emailOptIn;save();go()};$('#edp').onclick=editProfile;$('#thm').onclick=()=>{const t=['light','dark','auto'];S.theme=t[(t.indexOf(S.theme)+1)%3];save();go()};$$('[data-acc]').forEach(b=>b.onclick=()=>{S.accent=+b.dataset.acc;save();go()});$('#gl').onclick=()=>{const g=[10,20,30,50];S.goal=g[(g.indexOf(S.goal)+1)%4];save();go()};
   $('#rst').onclick=e=>{if(e.target.dataset.ok){S={...blank(),name:S.name,goal:S.goal,joined:S.joined,emailOptIn:S.emailOptIn,heartsAt:Date.now()};save();go()}else{e.target.dataset.ok=1;e.target.textContent='Tap again to erase everything'}}}};
 
 /* practice */
@@ -424,31 +474,54 @@ function practice(){const n=Object.keys(S.done).length,w=weakTags().slice(0,3);r
  <div class="mob" style="margin-top:16px">${goalCard()}</div>`}
 
 /* shop */
-const SHOP=[{id:'refill',n:'Heart Refill',d:'Fill up all 5 hearts',p:50,e:'❤️'},{id:'tie',n:'Bow Tie',d:'A dapper deal-maker',p:60,e:'🎀'},{id:'shades',n:'Cool Shades',d:'For bright bull markets',p:80,e:'🕶️'},{id:'hat',n:'Top Hat',d:'Very fancy investor',p:120,e:'🎩'},{id:'crown',n:'Gold Crown',d:'King of the market',p:250,e:'👑'}];
+const SHOP=[{id:'tie',n:'Bow Tie',d:'A dapper deal-maker',p:60,e:'🎀'},{id:'shades',n:'Cool Shades',d:'For bright bull markets',p:80,e:'🕶️'},{id:'hat',n:'Top Hat',d:'Very fancy investor',p:120,e:'🎩'},{id:'crown',n:'Gold Crown',d:'King of the market',p:250,e:'👑'},{id:'party',n:'Party Hat',d:'Celebrate every green day',p:90,e:'🥳'},{id:'monocle',n:'Monocle',d:'Read the fine print',p:110,e:'🧐'},{id:'scarf',n:'Cozy Scarf',d:'Warm in a bear market',p:100,e:'🧣'},{id:'phones',n:'Headphones',d:'Tune out the noise',p:150,e:'🎧'}];
+const POWER=[{id:'refill',n:'Heart Refill',d:'Fill up all 5 hearts',p:50,e:'❤️'},{id:'freeze',n:'Streak Freeze',d:'Protects your streak for one missed day (max 2)',p:100,e:'🧊'},{id:'boost',n:'Double XP',d:'Earn 2x XP for 15 minutes',p:80,e:'⚡'}];
+const SLOTS=[['hat','crown','party'],['shades','monocle'],['tie','scarf']];
 function shop(){return `<div class="pagehead"><h1>Shop</h1></div><div class="hero" id="shopHero">${chip(130)}<div><h2>Dress up Chip!</h2><p class="muted">Earn ${COIN} by finishing lessons. Perfect lessons earn double.</p><p style="font-size:22px;color:var(--gold-d);margin-top:6px">${COIN} ${S.coins}</p></div></div>
- <div class="list">${SHOP.map(i=>{const own=S.owned.includes(i.id),on=S.wear.includes(i.id);let b;
-  if(i.id==='refill')b=`<button class="btn" data-buy="refill" ${S.hearts>=5||S.coins<i.p?'disabled':''}>${S.hearts>=5?'Full':COIN+' '+i.p}</button>`;
-  else b=own?`<button class="btn ${on?'ghost':''}" data-buy="${i.id}">${on?'Take off':'Wear'}</button>`:`<button class="btn gold" data-buy="${i.id}" ${S.coins<i.p?'disabled':''}>${COIN} ${i.p}</button>`;
+ <h2 class="sec">Power-ups</h2><div class="list">${POWER.map(i=>{const full=i.id==='refill'?S.hearts>=5:i.id==='freeze'?S.freezes>=2:boosted(),lbl=i.id==='refill'?'Full':i.id==='freeze'?'Equipped 2/2':'Active';
+  return `<div class="shopitem"><span class="ae">${i.e}</span><div><h3>${i.n}</h3><p class="muted">${i.d}</p></div><button class="btn" data-buy="${i.id}" ${full||S.coins<i.p?'disabled':''}>${full?lbl:COIN+' '+i.p}</button></div>`}).join('')}</div>
+ <h2 class="sec">Outfits</h2><div class="list">${SHOP.map(i=>{const own=S.owned.includes(i.id),on=S.wear.includes(i.id);let b;
+  b=own?`<button class="btn ${on?'ghost':''}" data-buy="${i.id}">${on?'Take off':'Wear'}</button>`:`<button class="btn gold" data-buy="${i.id}" ${S.coins<i.p?'disabled':''}>${COIN} ${i.p}</button>`;
   return `<div class="shopitem"><span class="ae">${i.e}</span><div><h3>${i.n}</h3><p class="muted">${i.d}</p></div>${b}</div>`}).join('')}</div>`}
-function buy(id){const i=SHOP.find(x=>x.id===id);
+function buy(id){const i=SHOP.find(x=>x.id===id)||POWER.find(x=>x.id===id);
  if(id==='refill'){if(S.coins<i.p||S.hearts>=5)return;S.coins-=i.p;S.hearts=5}
+ else if(id==='freeze'){if(S.coins<i.p||S.freezes>=2)return;S.coins-=i.p;S.freezes++}
+ else if(id==='boost'){if(S.coins<i.p||boosted())return;S.coins-=i.p;S.boostUntil=Date.now()+15*60e3}
  else if(!S.owned.includes(id)){if(S.coins<i.p)return;S.coins-=i.p;S.owned.push(id);S.wear.push(id)}
  else S.wear=S.wear.includes(id)?S.wear.filter(x=>x!==id):[...S.wear,id];
- if(S.wear.includes(id)&&['hat','crown'].includes(id))S.wear=S.wear.filter(x=>x===id||!['hat','crown'].includes(x));
+ const sl=SLOTS.find(g=>g.includes(id));if(sl&&S.wear.includes(id))S.wear=S.wear.filter(x=>x===id||!sl.includes(x));
  save();SFX.coin();go();react('happy',$('#shopHero'))}
 
 /* profile */
 function profile(){const c1=COURSE[0].lessons.filter(l=>S.done[l.id]).length;
- const A=[['🎓','First Steps','Finish your first lesson',S.lessons,1],['🔥','On Fire','Reach a 3-day streak',S.best,3],['💎','Perfectionist','Get 3 perfect lessons',S.perfects,3],['⚡','XP Hunter','Earn 200 XP',S.xp,200],['🏆','Chapter Champ','Finish Chapter 1',c1,COURSE[0].lessons.length],['🐂','Bull Market','Finish both chapters',Object.keys(S.done).length,FLAT.length]];
- return `<div class="hero">${chip(110)}<div><h2>${esc(S.name)}</h2><p class="muted">Joined ${new Date(S.joined+'T00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'})}</p></div></div>
+ const A=[['🎓','First Steps','Finish your first lesson',S.lessons,1],['🔥','On Fire','Reach a 3-day streak',S.best,3],['💎','Perfectionist','Get 3 perfect lessons',S.perfects,3],['⚡','XP Hunter','Earn 200 XP',S.xp,200],['🏆','Chapter Champ','Finish Chapter 1',c1,COURSE[0].lessons.length],['🗺️','Explorer','Finish 5 chapters',COURSE.filter(c=>c.lessons.every(l=>S.done[l.id])).length,5],['🤝','Social Investor','Follow 3 friends',S.friends.length,3],['🐂','Bull Market','Finish every chapter',Object.keys(S.done).length,FLAT.length]];
+ return `<div class="hero"><span class="av">${esc(S.avatar)}</span><div style="flex:1"><h2>${esc(S.name)}</h2>${S.username?`<p class="muted">@${esc(S.username)}</p>`:''}${S.bio?`<p style="margin:4px 0">${esc(S.bio)}</p>`:''}<p class="muted">${S.friends.length} following · Joined ${new Date(S.joined+'T00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'})}</p><button class="btn ghost" id="edp" style="margin-top:10px">✏️ Edit profile</button></div>${chip(90)}</div>
  <h2 class="sec">Statistics</h2><div class="grid2">${[['🔥',streakNow(),'Day streak'],['⚡',S.xp,'Total XP'],['📚',S.lessons,'Lessons done'],['💎',S.perfects,'Perfect lessons']].map(([e,v,l])=>`<div class="sc2"><span>${e}</span><div><b>${v}</b><small>${l}</small></div></div>`).join('')}</div>
  <h2 class="sec">Achievements</h2><div class="list">${A.map(([e,n,d,v,m])=>`<div class="ach ${v>=m?'':'no'}"><span class="ae">${e}</span><div><h3>${n}</h3><p class="muted">${d}</p><div class="sbar"><i style="width:${Math.min(100,v/m*100)}%;background:var(--gold)"></i></div></div><b>${Math.min(v,m)}/${m}</b></div>`).join('')}</div>
  <h2 class="sec">Account</h2><div class="list"><div class="toggle"><b>${esc(user?.email||'Not signed in')}</b><button class="btn ghost" id="so">Sign out</button></div>
  <div class="toggle"><div><b>Streak emails</b><p class="muted" style="font-size:14px">Reminders before your streak ends</p></div><button class="btn ghost" id="emo">${S.emailOptIn?'On 📬':'Off'}</button></div></div>
  <h2 class="sec">Settings</h2><div class="list"><div class="toggle"><b>Sound effects</b><button class="btn ghost" id="snd">${S.sound?'On 🔊':'Off 🔇'}</button></div>
  <div class="toggle"><b>Daily goal</b><button class="btn ghost" id="gl">${S.goal} XP</button></div>
+ <div class="toggle"><b>Theme</b><button class="btn ghost" id="thm">${{light:'☀️ Light',dark:'🌙 Dark',auto:'🌓 Auto'}[S.theme]}</button></div>
+ <div class="toggle"><b>Accent color</b><div class="accs">${ACCENTS.map((a,i)=>`<button data-acc="${i}" class="${S.accent===i?'sel':''}" style="background:${a[0]}" aria-label="Accent ${i+1}"></button>`).join('')}</div></div>
+ <div class="toggle"><b>Streak freezes</b><span>🧊 ${S.freezes} / 2</span></div>
  <div class="toggle"><b>Reset progress</b><button class="btn red" id="rst">Reset</button></div></div>
  <div class="mob" style="margin-top:20px">${skillsCard()}</div>`}
+
+const AVATARS=['🐂','🐻','🦊','🐼','🦁','🐯','🐸','🐵','🦉','🐙','🦄','🐲','🚀','💎','🌟','🧑‍💼'];
+function editProfile(){const m=document.createElement('div');m.className='modal';let av=S.avatar;
+ m.innerHTML=`<div><h2>Edit profile</h2><div class="avs">${AVATARS.map(a=>`<button data-av="${a}" class="${a===av?'sel':''}">${a}</button>`).join('')}</div>
+ <label>Name<input class="name" id="pn" maxlength="20" value="${esc(S.name)}"></label>
+ <label>Username${user?'':' (sign in to use with friends)'}<input class="name" id="pu" maxlength="20" placeholder="e.g. bullrunner" value="${esc(S.username)}" autocomplete="off"></label>
+ <label>Bio<textarea class="name" id="pb" maxlength="120" placeholder="Tell friends about you">${esc(S.bio)}</textarea></label>
+ <p class="err" id="perr"></p><button class="btn wide" id="psv">Save</button><button class="link" id="pcx">Cancel</button></div>`;
+ document.body.appendChild(m);gsap.from(m.firstChild,{yPercent:100,duration:.35,ease:'power3.out'});
+ $$('[data-av]',m).forEach(b=>b.onclick=()=>{av=b.dataset.av;$$('[data-av]',m).forEach(x=>x.classList.toggle('sel',x===b))});
+ $('#pcx',m).onclick=()=>m.remove();
+ $('#psv',m).onclick=async()=>{const n=$('#pn',m).value.trim(),u=$('#pu',m).value.trim().toLowerCase(),err=$('#perr',m);
+  if(!n)return err.textContent='Name can’t be empty.';if(u&&!/^[a-z0-9_]{3,20}$/.test(u))return err.textContent='Username: 3–20 letters, numbers or _.';
+  if(u&&u!==S.username&&user){try{const f=await cloud.findUser(u);if(f&&f.uid!==user.uid)return err.textContent='That username is taken.'}catch{return err.textContent='Couldn’t check username right now.'}}
+  Object.assign(S,{name:n,username:u,bio:$('#pb',m).value.trim(),avatar:av});save();m.remove();SFX.coin();go()}}
 
 /* onboarding */
 const LEVELS=[['🌱','I’m brand new','Perfect! We’ll start from the very beginning.'],['🌿','I know a little','Nice! If you pass the Chapter 1 review, you can skip ahead.'],['🌳','I know a lot','Wow! Try the Chapter 1 review to jump straight to Chapter 2.']];
@@ -574,9 +647,9 @@ function noHearts(){regen();L.locked=true;$('#sheet').innerHTML='';$('#lhead').s
  $('#refill').onclick=()=>{S.coins-=50;S.hearts=5;save();SFX.coin();$('#lh').textContent='❤️ 5';L.queue.length?next():startLesson(L.id)};
  $('#prac').onclick=()=>Object.keys(S.done).length?startLesson('practice'):($('#prac').textContent='Finish a lesson first')}
 function finish(){L.finished=true;const perfect=L.wrong===0&&!L.matchMiss,repeat=!L.practice&&S.done[L.id],chk=!L.practice&&LESSON[L.id].check;
- const xp=repeat?5:10+(chk?5:0)+(perfect?5:0),coins=5+(perfect?5:0),acc=Math.round(L.right/Math.max(1,L.right+L.wrong)*100),sec=Math.round((Date.now()-L.t0)/1e3);
+ const xp=(repeat?5:10+(chk?5:0)+(perfect?5:0))*(boosted()?2:1),coins=5+(perfect?5:0),acc=Math.round(L.right/Math.max(1,L.right+L.wrong)*100),sec=Math.round((Date.now()-L.t0)/1e3);
  S.xp+=xp;S.coins+=coins;S.lessons++;if(perfect)S.perfects++;if(L.practice)S.hearts=Math.min(5,S.hearts+1);
- S.daily=S.daily.day===day()?{day:day(),xp:S.daily.xp+xp}:{day:day(),xp};
+ S.daily=S.daily.day===day()?{day:day(),xp:S.daily.xp+xp}:{day:day(),xp};S.week=S.week.id===wk()?{id:wk(),xp:S.week.xp+xp}:{id:wk(),xp};{const q=Q();q.xp+=xp;q.lessons++;if(perfect)q.perfects++}
  const streakUp=S.lastDay!==day();if(streakUp){S.streak=S.lastDay===day(-1)?S.streak+1:1;S.lastDay=day();S.days=[...new Set([...S.days,day()])].slice(-30);S.best=Math.max(S.best,S.streak)}
  const lc=!L.practice&&LESSON[L.id],jumping=chk&&!repeat&&!COURSE[lc.ch].lessons.every(x=>x.check||S.done[x.id]),jumpFail=jumping&&L.wrong>2;
  if(!L.practice&&!repeat&&!jumpFail){S.done[L.id]=1;if(jumping)COURSE[lc.ch].lessons.forEach(x=>S.done[x.id]=1);justDone=L.id}save();$('#sheet').innerHTML='';
@@ -604,7 +677,7 @@ setInterval(()=>{if(S.hearts<5&&$('#lesson').hidden&&S.name){const h=S.hearts;re
 /* ---------- auth boot ---------- */
 let authed=false;
 window.onAuth=async u=>{if(!u&&!user&&authed)return; // late 'still signed out' after the offline fallback: don't wipe what the kid is typing
- flush();authed=true;user=u;syncOK=false;
+ flush();authed=true;user=u;syncOK=false;FR=null;
  if(u){let r=null;try{r=await cloud.load(u.uid);syncOK=true}catch(e){console.error(e)}
   if(r)S={...blank(),...Object.fromEntries(Object.keys(DEF).filter(k=>r[k]!==undefined).map(k=>[k,r[k]]))};
   else if(!S.name)S.name=(u.displayName||'').split(' ')[0];
@@ -626,7 +699,11 @@ window.cloud={
  signOut:()=>A.signOut(auth),
  load:uid=>F.getDoc(F.doc(db,'users',uid)).then(s=>s.exists()?s.data():null),
  // mergeFields: replace app fields wholesale (so maps can shrink) but keep server-owned fields like `mail`
- save:(uid,d)=>F.setDoc(F.doc(db,'users',uid),d,{mergeFields:Object.keys(d)})};
+ save:(uid,d)=>F.setDoc(F.doc(db,'users',uid),d,{mergeFields:Object.keys(d)}),
+ saveProfile:(uid,d)=>F.setDoc(F.doc(db,'profiles',uid),d),
+ findUser:u=>F.getDocs(F.query(F.collection(db,'profiles'),F.where('username','==',u),F.limit(1))).then(q=>q.empty?null:{uid:q.docs[0].id,...q.docs[0].data()}),
+ profiles:uids=>Promise.all(uids.map(u=>F.getDoc(F.doc(db,'profiles',u)).then(s=>s.exists()?{uid:u,...s.data()}:null))).then(a=>a.filter(Boolean)),
+ followers:uid=>F.getCountFromServer(F.query(F.collection(db,'profiles'),F.where('following','array-contains',uid))).then(s=>s.data().count)};
 A.onAuthStateChanged(auth,u=>window.onAuth(u));
 </script>
 </body>
