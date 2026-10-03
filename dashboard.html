@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chip Dashboard</title>
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<script src="firebase-config.js"></script>
+<script src="chapters.js"></script>
+<style>
+:root{--pri:#5B4CF5;--pri-d:#4031D4;--pri-l:#EFEDFF;--ok:#0A9467;--bad:#DE3355;--gold:#FFB31A;--ink:#1F1D33;--ink2:#625F7A;--line:#E9E6F4;--soft:#F4F2FB;--bg:#F8F7FD;--card:#fff;--hf:Fredoka,Nunito,system-ui,sans-serif;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--pri-l:#2B2752;--ok:#5EE6B5;--bad:#FF9AAD;--ink:#EEECF8;--ink2:#B3B0C9;--line:#312E47;--soft:#26233A;--bg:#141225;--card:#1D1B30;color-scheme:dark}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Nunito,system-ui,sans-serif;font-weight:700;color:var(--ink);background:var(--bg);line-height:1.4}
+h1,h2,h3{font-family:var(--hf);font-weight:600;line-height:1.2}
+.wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+header h1{color:var(--pri);font-size:28px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.tabs button{padding:9px 16px;border-radius:99px;border:2px solid var(--line);background:var(--card);font:inherit;color:var(--ink2);cursor:pointer}
+.tabs button.on{border-color:var(--pri);color:var(--pri);background:var(--pri-l)}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:18px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:12px 0}
+.stat{background:var(--soft);border-radius:14px;padding:10px 12px}.stat b{display:block;font-family:var(--hf);font-size:22px;font-weight:600}.stat small{color:var(--ink2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:14px;border:0;background:var(--pri);color:#fff;font:600 16px var(--hf);cursor:pointer;box-shadow:0 3px 0 var(--pri-d)}
+.btn.ghost{background:var(--card);color:var(--pri);border:2px solid var(--line);box-shadow:none}.btn:disabled{opacity:.5;cursor:default}
+input{font:inherit;font-size:16px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);width:100%}
+input:focus{outline:none;border-color:var(--pri)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>input{flex:1;min-width:180px}
+.muted{color:var(--ink2);font-weight:600}.err{color:var(--bad);min-height:20px;margin:6px 0;font-size:14px}
+.box{max-width:400px;margin:40px auto;display:grid;gap:10px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:9px 8px;border-bottom:1.5px solid var(--line);vertical-align:top}th{color:var(--ink2);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.scroll{overflow-x:auto}
+.code{font-family:var(--hf);font-size:28px;letter-spacing:4px;color:var(--pri)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chips input{width:auto;accent-color:var(--pri)}.chips label{white-space:nowrap;display:flex;gap:6px;align-items:center;background:var(--soft);padding:6px 10px;border-radius:99px;font-size:13px;cursor:pointer}
+.tag{display:inline-block;background:var(--soft);border-radius:99px;padding:2px 9px;font-size:12px;margin:2px 2px 0 0}
+.tip{background:var(--pri-l);border-radius:14px;padding:10px 12px;margin-top:10px;font-size:15px}
+.switch{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;padding-top:12px;border-top:1.5px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><p class="muted">Loading…</p></div>
+<script type="module">
+const V='https://www.gstatic.com/firebasejs/11.0.2/';
+const [{initializeApp},A,F]=await Promise.all(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].map(f=>import(V+f)));
+const app=initializeApp(self.FIREBASE_CONFIG),auth=A.getAuth(app),db=F.getFirestore(app);
+try{if(localStorage.getItem('chip-emu')){A.connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});F.connectFirestoreEmulator(db,'127.0.0.1',8080)}}catch{}
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],esc=s=>String(s??'').replace(/[&<>"']/g,c=>`&#${c.charCodeAt(0)};`);
+const stub=()=>({}),CH=["What's a Stock?",'The Stock Market',...MORE_CHAPTERS(stub,stub,stub,stub,stub).chapters.map(c=>c.title)];
+const wk=()=>{const d=new Date();d.setDate(d.getDate()-(d.getDay()+6)%7);return d.toLocaleDateString('en-CA')};
+let user=null,tab='kids',admin=false;
+const shell=body=>{$('#app').innerHTML=`<header><h1>🐂 Chip Dashboard</h1>${user?`<div class="row"><span class="muted">${esc(user.email)}</span><button class="btn ghost" id="out">Sign out</button></div>`:''}</header>
+ ${user?`<div class="tabs">${[['kids','👨‍👩‍👧 My kids'],['classes','🏫 My classes'],...(admin?[['admin','📊 Analytics']]:[])].map(([k,n])=>`<button data-t="${k}" class="${k===tab?'on':''}">${n}</button>`).join('')}</div>`:''}${body}`;
+ $('#out')&&($('#out').onclick=()=>A.signOut(auth));$$('[data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()})};
+
+function signIn(){shell(`<div class="box card"><h2>For parents & teachers</h2><p class="muted">See your child’s progress, or run a class. Parents: sign in with the email your child added in Chip.</p>
+ <button class="btn ghost" id="g">Continue with Google</button><p class="muted" style="text-align:center">or</p>
+ <input id="em" type="email" placeholder="Email" autocomplete="email"><input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
+ <p class="err" id="err"></p><div class="row"><button class="btn" id="in">Log in</button><button class="btn ghost" id="up">Create account</button></div></div>`);
+ const err=e=>$('#err').textContent=(e.code||e.message||'').replace('auth/','').replace(/-/g,' ');
+ $('#g').onclick=()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()).catch(err);
+ $('#in').onclick=()=>A.signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value).catch(err);
+ $('#up').onclick=()=>A.createUserWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value).then(c=>A.sendEmailVerification(c.user)).catch(err)}
+
+async function render(){if(!user)return signIn();
+ if(tab==='kids')return kids();if(tab==='classes')return classes();if(tab==='admin')return analytics()}
+
+/* parents: children who added this email in Chip → Profile → Parent or guardian */
+async function kids(){
+ if(!user.emailVerified){shell(`<div class="card"><h2>Verify your email first</h2><p class="muted">We sent a link to ${esc(user.email)}. This proves you own the email your child added.</p><div class="row" style="margin-top:12px"><button class="btn" id="chk">I’ve verified</button><button class="btn ghost" id="re">Resend link</button></div></div>`);
+  $('#re').onclick=()=>A.sendEmailVerification(user).then(()=>$('#re').textContent='Sent ✓');$('#chk').onclick=async()=>{await user.reload();await user.getIdToken(true);user=auth.currentUser;render()};return}
+ shell('<p class="muted">Loading…</p>');
+ let list=[];try{list=(await F.getDocs(F.query(F.collection(db,'users'),F.where('parentEmail','==',user.email.toLowerCase())))).docs.map(d=>({id:d.id,...d.data()}))}catch(e){console.error(e)}
+ shell(list.length?list.map(k=>{const s=k.summary||{},w=s.weekId===wk()?s.weekXp:0,f=s.fund||{};
+  const ask=s.weak?.[0]?`Ask ${esc(k.name)}: “What does <b>${esc(s.weak[0].toLowerCase())}</b> mean? Can you teach me?”`:f.cost?`Ask ${esc(k.name)} why they picked the companies in their Chip fund.`:`Ask ${esc(k.name)} what a stock is. Their first chapter covers it!`;
+  return `<div class="card"><h2>${esc(k.avatar||'🐂')} ${esc(k.name||'Your child')}</h2><p class="muted">Currently on: ${esc(s.chapter||'Getting started')}</p>
+  <div class="grid"><div class="stat"><b>🔥 ${s.streak||0}</b><small>day streak</small></div><div class="stat"><b>${s.active7||0}/7</b><small>days active this week</small></div><div class="stat"><b>⚡ ${w}</b><small>XP this week</small></div><div class="stat"><b>📚 ${s.lessons||0}</b><small>lessons done</small></div><div class="stat"><b>🪙 ${f.value||0}</b><small>fund value (${(f.value||0)-(f.cost||0)>=0?'+':''}${(f.value||0)-(f.cost||0)})</small></div></div>
+  ${s.strong?.length?`<p><span class="muted">Strong at:</span> ${s.strong.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</p>`:''}${s.weak?.length?`<p><span class="muted">Practising:</span> ${s.weak.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</p>`:''}
+  <div class="tip">💬 ${ask}</div>
+  <div class="switch"><div><b>Allow friends & leaderboards</b><p class="muted" style="font-size:14px">Shares username, avatar, XP and streak with other learners. Never their name or bio.</p></div><button class="btn ${k.parentOK?'':'ghost'}" data-ok="${k.id}" data-v="${k.parentOK?1:''}">${k.parentOK?'Allowed':'Not allowed'}</button></div></div>`}).join('')
+ :`<div class="card"><h2>No kids linked yet</h2><p class="muted">In the Chip app, your child goes to <b>Profile → Parent or guardian</b> and enters <b>${esc(user.email)}</b>. They’ll show up here, and you’ll get a weekly email about their progress.</p></div>`);
+ $$('[data-ok]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await F.updateDoc(F.doc(db,'users',b.dataset.ok),{parentOK:!b.dataset.v})}catch(e){console.error(e);alert('Couldn’t save. Try again.')}kids()})}
+
+/* teachers: classes/{code}, students join with the code */
+const newCode=()=>Array.from(crypto.getRandomValues(new Uint8Array(6)),x=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[x%32]).join('');
+async function classes(){shell('<p class="muted">Loading…</p>');
+ let cs=[];try{cs=(await F.getDocs(F.query(F.collection(db,'classes'),F.where('teacher','==',user.uid)))).docs.map(d=>({code:d.id,...d.data()}))}catch(e){console.error(e)}
+ const mem=await Promise.all(cs.map(c=>F.getDocs(F.collection(db,'classes',c.code,'members')).then(q=>q.docs.map(d=>({uid:d.id,...d.data()}))).catch(()=>[])));
+ shell(`<div class="card"><h2>Create a class</h2><div class="row" style="margin-top:10px"><input id="cn" maxlength="40" placeholder="e.g. Ms. Lee’s 5th grade"><button class="btn" id="mk">Create</button></div><p class="err" id="cerr"></p></div>`+
+ cs.map((c,i)=>{const ms=mem[i].map(m=>({...m,w:m.weekId===wk()?m.weekXp:0})).sort((a,b)=>b.w-a.w),stuck={};ms.forEach(m=>(m.weak||[]).forEach(t=>stuck[t]=(stuck[t]||0)+1));
+  return `<div class="card"><div class="row" style="justify-content:space-between"><div><h2>${esc(c.name)}</h2><p class="muted">Students join in Chip → Profile → Class with code</p></div><div class="code">${c.code}</div></div>
+  <div class="grid"><div class="stat"><b>${ms.length}</b><small>students</small></div><div class="stat"><b>${ms.filter(m=>m.w>0).length}</b><small>active this week</small></div><div class="stat"><b>${ms.reduce((a,m)=>a+m.w,0)}</b><small>class XP this week</small></div></div>
+  ${Object.keys(stuck).length?`<p><span class="muted">Class is practising:</span> ${Object.entries(stuck).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([t,n])=>`<span class="tag">${esc(t)} · ${n}</span>`).join('')}</p>`:''}
+  <div class="scroll" style="margin-top:10px"><table><tr><th>Student</th><th>XP this week</th><th>Lessons</th><th>Streak</th><th>On chapter</th><th>Practising</th><th></th></tr>${ms.map(m=>`<tr><td>${esc(m.avatar)} ${esc(m.name)}</td><td>${m.w}</td><td>${m.lessons||0}</td><td>🔥 ${m.streak||0}</td><td>${esc(m.chapter||'')}</td><td>${(m.weak||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</td><td><button class="btn ghost" data-rm="${c.code}/${m.uid}" style="padding:6px 10px;font-size:13px">Remove</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No students yet. Share the code above.</td></tr>'}</table></div>
+  <h3 style="margin-top:16px">Assigned chapters</h3><p class="muted" style="font-size:14px">Students see a 📌 badge on these.</p><div class="chips">${CH.map((t,j)=>`<label><input type="checkbox" data-as="${c.code}" value="${j}" ${(c.assigned||[]).includes(j)?'checked':''}> ${j+1}. ${esc(t)}</label>`).join('')}</div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn ghost" data-del="${c.code}">Delete class</button></div></div>`}).join(''));
+ $('#mk').onclick=async()=>{const n=$('#cn').value.trim();if(!n)return $('#cerr').textContent='Give the class a name.';
+  for(let i=0;i<5;i++){try{await F.setDoc(F.doc(db,'classes',newCode()),{name:n,teacher:user.uid,assigned:[],created:Date.now()});return classes()}catch(e){console.error(e)}}$('#cerr').textContent='Couldn’t create the class. Try again.'};
+ $$('[data-as]').forEach(b=>b.onchange=()=>{const c=b.dataset.as;F.updateDoc(F.doc(db,'classes',c),{assigned:$$(`[data-as="${c}"]:checked`).map(x=>+x.value)}).catch(console.error)});
+ $$('[data-rm]').forEach(b=>b.onclick=()=>{const[c,u]=b.dataset.rm.split('/');if(confirm('Remove this student from the class?'))F.deleteDoc(F.doc(db,'classes',c,'members',u)).then(classes)});
+ $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this class? Students will be removed from it.'))F.deleteDoc(F.doc(db,'classes',b.dataset.del)).then(classes)})}
+
+/* admin: funnel from metrics/{day}_{event}, retention from users */
+const EV=[['welcome','Opened app'],['ob_name','Entered name'],['ob_level','Picked level'],['ob_goal','Picked goal'],['signup','Signed up'],['first_lesson','First lesson'],['lesson','Lessons'],['practice','Practice'],['fund_buy','Fund buys'],['class_join','Joined class'],['install','Installed'],['push_on','Push on']];
+async function analytics(){shell('<p class="muted">Loading…</p>');
+ const since=new Date(Date.now()-13*864e5).toISOString().slice(0,10),days=[...Array(14)].map((_,i)=>new Date(Date.now()-(13-i)*864e5).toISOString().slice(0,10));
+ const [ms,us]=await Promise.all([F.getDocs(F.collection(db,'metrics')),F.getDocs(F.collection(db,'users'))]);const M={};ms.docs.forEach(d=>{const[dd,...e]=d.id.split('_');M[dd+'|'+e.join('_')]=d.data().n});
+ const tot=e=>days.reduce((a,d)=>a+(M[d+'|'+e]||0),0),U=us.docs.map(d=>d.data());
+ const add=(d,n)=>{const x=new Date(d+'T00:00');x.setDate(x.getDate()+n);return x.toLocaleDateString('en-CA')};
+ const coh=U.filter(u=>u.joined&&u.joined>=add(new Date().toLocaleDateString('en-CA'),-37)&&u.joined<=add(new Date().toLocaleDateString('en-CA'),-1));
+ const ret=n=>{const el=coh.filter(u=>u.joined<=add(new Date().toLocaleDateString('en-CA'),-n));return el.length?Math.round(el.filter(u=>(u.days||[]).some(d=>d>=add(u.joined,n))).length/el.length*100)+'%':'–'};
+ shell(`<div class="card"><h2>Last 14 days</h2><div class="grid">${[['Signed up',tot('signup')],['First lessons',tot('first_lesson')],['Lessons',tot('lesson')],['Fund buys',tot('fund_buy')],['Total accounts',U.length],['Friends on',U.filter(u=>u.social).length]].map(([l,v])=>`<div class="stat"><b>${v}</b><small>${l}</small></div>`).join('')}</div>
+ <h3>Onboarding funnel</h3><div class="scroll"><table><tr><th>Step</th><th>People</th><th>% of opened</th></tr>${EV.slice(0,6).map(([e,l])=>`<tr><td>${l}</td><td>${tot(e)}</td><td>${tot('welcome')?Math.round(tot(e)/tot('welcome')*100)+'%':'–'}</td></tr>`).join('')}</table></div><p class="muted" style="font-size:13px;margin-top:6px">Onboarding steps count once per device. Google sign-ins can skip steps, so later steps may exceed earlier ones.</p></div>
+ <div class="card"><h2>Retention</h2><p class="muted">Accounts that joined in the last 5 weeks (${coh.length}).</p><div class="grid"><div class="stat"><b>${ret(1)}</b><small>came back day 2+</small></div><div class="stat"><b>${ret(7)}</b><small>came back day 7+</small></div></div></div>
+ <div class="card"><h2>Daily events</h2><div class="scroll"><table><tr><th>Event</th>${days.map(d=>`<th>${d.slice(5)}</th>`).join('')}</tr>${EV.map(([e,l])=>`<tr><td>${l}</td>${days.map(d=>`<td>${M[d+'|'+e]||''}</td>`).join('')}</tr>`).join('')}</table></div></div>`)}
+
+A.onAuthStateChanged(auth,async u=>{user=u;admin=false;if(u){try{admin=(await F.getDoc(F.doc(db,'admins',u.uid))).exists()}catch{}}render()});
+</script>
+</body>
+</html>

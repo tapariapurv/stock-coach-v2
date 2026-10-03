@@ -1,26 +1,68 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each learner can only read/write their own progress doc.
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    // A parent signs in with the (verified) email the child entered in Profile → Parent or guardian.
+    function isParent(d) { return signedIn() && request.auth.token.email_verified == true && d.parentEmail == request.auth.token.email; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // Private progress. The child owns it; a linked parent can read it and flip only `parentOK`.
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if signedIn() && (request.auth.uid == uid || isParent(resource.data) || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid && !('parentOK' in request.resource.data);
+      allow update: if signedIn() && (
+        (request.auth.uid == uid && !changed().hasAny(['parentOK'])) ||
+        (isParent(resource.data) && changed().hasOnly(['parentOK']) && request.resource.data.parentOK is bool));
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
     // Username claims: one doc per name, so two learners can never hold the same one.
     match /usernames/{name} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['uid']) && name.matches('^[a-z0-9_]{3,20}$');
-      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
     // Opt-in public profile: no real name or bio, and only under a username you have claimed.
     match /profiles/{uid} {
-      allow read: if request.auth != null;
-      allow delete: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid
+      allow read: if signedIn();
+      allow delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['username','avatar','xp','streak','weekId','weekXp','following','updatedAt'])
         && request.resource.data.username is string
         && get(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid
         && request.resource.data.following is list && request.resource.data.following.size() <= 200;
+    }
+    // Classes: a teacher owns the doc; students join by code and keep one member doc each.
+    match /classes/{code} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.teacher == request.auth.uid;
+      allow create: if signedIn() && code.matches('^[A-Z0-9]{6}$') && request.resource.data.teacher == request.auth.uid
+        && request.resource.data.keys().hasOnly(['name','teacher','assigned','created'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 40 && request.resource.data.assigned is list;
+      allow update: if signedIn() && resource.data.teacher == request.auth.uid && request.resource.data.teacher == resource.data.teacher
+        && request.resource.data.keys().hasOnly(['name','teacher','assigned','created'])
+        && request.resource.data.name.size() <= 40 && request.resource.data.assigned is list && request.resource.data.assigned.size() <= 30;
+      allow delete: if signedIn() && resource.data.teacher == request.auth.uid;
+      match /members/{uid} {
+        function teacher() { return get(/databases/$(database)/documents/classes/$(code)).data.teacher == request.auth.uid; }
+        allow read: if signedIn() && (teacher() || exists(/databases/$(database)/documents/classes/$(code)/members/$(request.auth.uid)));
+        allow create, update: if signedIn() && request.auth.uid == uid && exists(/databases/$(database)/documents/classes/$(code))
+          && request.resource.data.keys().hasOnly(['name','avatar','xp','lessons','streak','weekId','weekXp','chapter','weak','updatedAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() <= 20;
+        allow delete: if signedIn() && (request.auth.uid == uid || teacher());
+      }
+    }
+    // First-party analytics: daily counters that can only go up by one. Readable by admins only.
+    match /metrics/{id} {
+      allow read: if isAdmin();
+      allow create: if id.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}_(welcome|ob_name|ob_level|ob_goal|signup|first_lesson|lesson|practice|fund_buy|class_join|install|push_on)$')
+        && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == 1;
+      allow update: if request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == resource.data.n + 1;
+    }
+    // Admins are added by hand in the Firebase console (admins/{uid}, any content).
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
     }
   }
 }

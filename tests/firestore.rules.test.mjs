@@ -1,6 +1,6 @@
 // Firestore rules tests. Run: npx firebase emulators:exec --only firestore "node tests/firestore.rules.test.mjs"
 import {initializeTestEnvironment,assertSucceeds as ok,assertFails as no} from '@firebase/rules-unit-testing';
-import {doc,setDoc,getDoc,deleteDoc} from 'firebase/firestore';import fs from 'fs';
+import {doc,setDoc,getDoc,deleteDoc,updateDoc,getDocs,collection,query,where} from 'firebase/firestore';import fs from 'fs';
 const env=await initializeTestEnvironment({projectId:'chip-test',firestore:{rules:fs.readFileSync(new URL('../firestore.rules',import.meta.url),'utf8')}});
 const a=env.authenticatedContext('alice').firestore(),b=env.authenticatedContext('bob').firestore(),anon=env.unauthenticatedContext().firestore();
 const prof=u=>({username:u,avatar:'🐂',xp:1,streak:0,weekId:'x',weekXp:0,following:[],updatedAt:1});
@@ -18,4 +18,46 @@ await t('bob cannot read alice private doc',no(getDoc(doc(b,'users/alice'))));
 await t('bob cannot delete alice claim',no(deleteDoc(doc(b,'usernames/alice_1'))));
 await t('alice releases claim',ok(deleteDoc(doc(a,'usernames/alice_1'))));
 await t('alice deletes profile',ok(deleteDoc(doc(a,'profiles/alice'))));
+// parents
+await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'users/kid'),{name:'Kid',parentEmail:'mom@x.com',xp:5}));
+const mom=env.authenticatedContext('mom',{email:'mom@x.com',email_verified:true}).firestore(),momU=env.authenticatedContext('mom2',{email:'mom@x.com',email_verified:false}).firestore(),kid=env.authenticatedContext('kid').firestore();
+await t('verified parent reads child',ok(getDoc(doc(mom,'users/kid'))));
+await t('parent query by email works',ok(getDocs(query(collection(mom,'users'),where('parentEmail','==','mom@x.com')))));
+await t('unverified parent cannot read',no(getDoc(doc(momU,'users/kid'))));
+await t('stranger cannot read child',no(getDoc(doc(b,'users/kid'))));
+await t('parent can set parentOK',ok(updateDoc(doc(mom,'users/kid'),{parentOK:true})));
+await t('parent cannot change xp',no(updateDoc(doc(mom,'users/kid'),{xp:999})));
+await t('child cannot set parentOK',no(updateDoc(doc(kid,'users/kid'),{parentOK:false})));
+await t('child can update own progress',ok(updateDoc(doc(kid,'users/kid'),{xp:6})));
+await t('new user cannot create with parentOK',no(setDoc(doc(b,'users/bob'),{parentOK:true})));
+// classes
+const tch=env.authenticatedContext('teach').firestore(),cls={name:'5th grade',teacher:'teach',assigned:[],created:1};
+await t('teacher creates class',ok(setDoc(doc(tch,'classes/ABC123'),cls)));
+await t('cannot create class for someone else',no(setDoc(doc(b,'classes/XYZ789'),{...cls,teacher:'teach'})));
+await t('bad class code rejected',no(setDoc(doc(tch,'classes/abc'),cls)));
+await t('student can get class by code',ok(getDoc(doc(kid,'classes/ABC123'))));
+await t('student cannot list all classes',no(getDocs(collection(kid,'classes'))));
+await t('teacher lists own classes',ok(getDocs(query(collection(tch,'classes'),where('teacher','==','teach')))));
+await t('other user cannot edit class',no(updateDoc(doc(b,'classes/ABC123'),{assigned:[1]})));
+await t('teacher assigns chapters',ok(updateDoc(doc(tch,'classes/ABC123'),{assigned:[0,2]})));
+const m={name:'Kid',avatar:'🐂',xp:1,lessons:1,streak:1,weekId:'x',weekXp:1,chapter:'c',weak:[],updatedAt:1};
+await t('student joins class',ok(setDoc(doc(kid,'classes/ABC123/members/kid'),m)));
+await t('cannot join missing class',no(setDoc(doc(kid,'classes/NOPE00/members/kid'),m)));
+await t('cannot write member doc for another',no(setDoc(doc(b,'classes/ABC123/members/kid'),m)));
+await t('member doc rejects extra fields',no(setDoc(doc(kid,'classes/ABC123/members/kid'),{...m,email:'x'})));
+await t('classmate reads members',ok(getDocs(collection(kid,'classes/ABC123/members'))));
+await t('teacher reads members',ok(getDocs(collection(tch,'classes/ABC123/members'))));
+await t('outsider cannot read members',no(getDocs(collection(b,'classes/ABC123/members'))));
+await t('teacher removes student',ok(deleteDoc(doc(tch,'classes/ABC123/members/kid'))));
+// analytics
+await t('anon creates counter',ok(setDoc(doc(anon,'metrics/2026-10-03_welcome'),{n:1})));
+await t('counter +1 ok',ok(setDoc(doc(anon,'metrics/2026-10-03_welcome'),{n:2})));
+await t('counter jump rejected',no(setDoc(doc(anon,'metrics/2026-10-03_welcome'),{n:50})));
+await t('unknown event rejected',no(setDoc(doc(anon,'metrics/2026-10-03_hack'),{n:1})));
+await t('non-admin cannot read metrics',no(getDoc(doc(a,'metrics/2026-10-03_welcome'))));
+await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'admins/boss'),{}));
+const boss=env.authenticatedContext('boss').firestore();
+await t('admin reads metrics',ok(getDocs(collection(boss,'metrics'))));
+await t('admin reads users',ok(getDocs(collection(boss,'users'))));
+await t('user reads own admin flag',ok(getDoc(doc(a,'admins/alice'))));
 await env.cleanup();

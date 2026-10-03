@@ -9,6 +9,11 @@
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="chapters.js"></script>
+<script src="fund.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5B4CF5">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <style>
 /* Chip design system: indigo brand, caramel mascot, mint = correct, coral = wrong, gold = coins/progress */
 :root{--pri:#5B4CF5;--pri-d:#4031D4;--pri2:#8B5CF6;--pri-l:#EFEDFF;--pri-b:#CFC9FF;
@@ -262,6 +267,16 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--pri);flex:none}
 .quest{display:flex;align-items:center;gap:12px;padding:14px 0}.quest+.quest{border-top:1.5px solid var(--line)}.quest>span{font-size:28px;flex:none}.quest>div{flex:1;min-width:0}.quest .sbar{width:100%;margin:6px 0 2px}
 .side .quest{padding:10px 0}.side .quest>span{font-size:22px}
 .srow{display:flex;gap:8px;margin:10px 0 4px}.srow .name{flex:1;min-width:0}.srow .btn{min-width:0;padding:12px 18px}
+.asg{display:inline-block;margin-top:8px;background:rgba(255,255,255,.22);padding:4px 10px;border-radius:99px;font-size:12px;font-weight:900}
+.spk{float:right;margin:-4px -6px 0 8px;width:34px;height:34px;border-radius:10px;font-size:17px;opacity:.75}.spk:hover{background:var(--soft);opacity:1}
+.co{display:flex;align-items:center;gap:12px;padding:12px 0;width:100%;text-align:left}.co .ae{width:46px;height:46px;font-size:26px;background:var(--soft);border-radius:14px}.co>div{flex:1;min-width:0}.co small{color:var(--ink2)}
+.co .px{text-align:right;flex:none}.co .px b{display:block;font-family:var(--hf);font-weight:600}
+.up{color:var(--ok-d)}.dn{color:var(--bad-d)}[data-theme=dark] .up{color:#5EE6B5}[data-theme=dark] .dn{color:#FF9AAD}
+.spark{flex:none}@media(max-width:420px){.co .spark{display:none}}
+.big{font-family:var(--hf);font-size:34px;font-weight:600;line-height:1.1}
+.tip{display:flex;gap:12px;align-items:center;background:var(--gold-l);border:1.5px solid color-mix(in srgb,var(--gold) 45%,transparent);border-radius:var(--rs);padding:12px 14px;margin-top:12px;font-size:15px}
+.amts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%}.amts .btn{min-width:0;padding:12px 6px;font-size:16px}
+.note{font-size:13px;color:var(--ink2);margin-top:8px}
 .optin{display:flex;gap:10px;align-items:center;margin:12px 0;font-size:15px;cursor:pointer}
 </style>
 </head>
@@ -354,15 +369,23 @@ const LESSON=Object.fromEntries(FLAT.map(l=>[l.id,l]));
 /* ---------- state ---------- */
 const KEY='chip-stocks-v1',REGEN=20*60e3;
 const day=(o=0)=>{const d=new Date();d.setDate(d.getDate()+o);return d.toLocaleDateString('en-CA')};
-const DEF={name:'',goal:20,xp:0,coins:60,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],done:{},mastery:{},daily:{day:'',xp:0},owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day(),username:'',bio:'',avatar:'🐂',theme:'light',accent:0,social:false,friends:[],freezes:0,boostUntil:0,week:{id:'',xp:0},quests:{day:'',xp:0,lessons:0,perfects:0,claimed:[]}};
+const DEF={name:'',goal:20,xp:0,coins:60,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],done:{},mastery:{},daily:{day:'',xp:0},owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day(),username:'',bio:'',avatar:'🐂',theme:'light',accent:0,social:false,parentEmail:'',classCode:'',tts:false,fund:{h:{},n:0},friends:[],freezes:0,boostUntil:0,week:{id:'',xp:0},quests:{day:'',xp:0,lessons:0,perfects:0,claimed:[]}};
 const blank=()=>({...structuredClone(DEF),heartsAt:Date.now(),joined:day()});
 let S;try{S={...blank(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{S=blank()}
 let user=null,syncOK=false,syncT,pending=null;
+// first-party analytics: daily counters in Firestore, no third-party trackers (kids' app)
+window.TQ=[];
+function track(ev,once){try{if(once){const t=JSON.parse(localStorage.getItem('chip-t')||'{}');if(t[ev])return;t[ev]=1;localStorage.setItem('chip-t',JSON.stringify(t))}}catch{}
+ const id=new Date().toISOString().slice(0,10)+'_'+ev;window.cloud?cloud.track(id).catch(()=>{}):TQ.push(id)}
 // debounced cloud write; the snapshot is bound to its uid so a sign-out/sign-in can never cross accounts
-const flush=()=>{clearTimeout(syncT);if(pending){const[uid,d,pb]=pending;pending=null;cloud.save(uid,d).catch(console.error);if(pb)cloud.saveProfile(uid,pb).catch(console.error)}};
+const flush=()=>{clearTimeout(syncT);if(pending){const[uid,d,pb,mm]=pending;pending=null;cloud.save(uid,d).catch(console.error);if(pb)cloud.saveProfile(uid,pb).catch(console.error);if(mm)cloud.saveMember(mm[0],uid,mm[1]).catch(console.error)}};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch{}
- if(user&&syncOK){pending=[user.uid,{...structuredClone(S),email:user.email,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,updatedAt:Date.now()},pub()];clearTimeout(syncT);syncT=setTimeout(flush,800)}};
+ if(user&&syncOK){pending=[user.uid,{...structuredClone(S),email:user.email,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,updatedAt:Date.now(),summary:summary()},pub(),mem()];clearTimeout(syncT);syncT=setTimeout(flush,800)}};
 // public profile is opt-in (parent consent) and carries no real name or bio
+// read by the parent dashboard and the weekly parent email
+const summary=()=>({weekId:S.week.id,weekXp:S.week.xp,lessons:S.lessons,streak:streakNow(),active7:S.days.filter(d=>d>=day(-6)).length,chapter:COURSE[LESSON[curLesson()]?.ch]?.title||'Finished every chapter',
+ strong:Object.keys(S.mastery).filter(k=>strength(k)>=.6).sort((a,b)=>strength(b)-strength(a)).slice(0,3).map(k=>TAGS[k]),weak:weakTags().filter(k=>strength(k)<.6).slice(0,3).map(k=>TAGS[k]),fund:fundStats(),friendsOn:S.social});
+const mem=()=>S.classCode?[S.classCode,{name:S.name.slice(0,20),avatar:S.avatar,xp:S.xp,lessons:S.lessons,streak:streakNow(),weekId:S.week.id,weekXp:S.week.xp,chapter:summary().chapter,weak:summary().weak,updatedAt:Date.now()}]:null;
 const pub=()=>S.social&&S.username?{username:S.username,avatar:S.avatar,xp:S.xp,streak:streakNow(),weekId:S.week.id,weekXp:S.week.xp,following:S.friends.slice(0,200),updatedAt:Date.now()}:null;
 addEventListener('pagehide',flush);
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -443,12 +466,12 @@ const ICO={star:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5l2
 
 /* ---------- app shell ---------- */
 let tab='learn',justDone=null;
-const TABS=[['learn','🏠','Learn'],['practice','🎯','Practice'],['league','🏆','Leagues'],['quests','📜','Quests'],['shop','🛍️','Shop'],['profile','🐂','Profile']];
+const TABS=[['learn','🏠','Learn'],['practice','🎯','Practice'],['fund','📈','Fund'],['league','🏆','Leagues'],['shop','🛍️','Shop'],['profile','🐂','Profile']];
 function go(t=tab){const same=t===tab&&$('.shell'),sy=scrollY;tab=t;regen();applyTheme();useFreeze();loops.forEach(x=>x.kill());loops=[];
  if(!S.name)return onboard(user?1:0);
  $('#app').innerHTML=`<div class="shell"><nav class="nav"><div class="logo">${chip(40)}chip</div>${TABS.map(([k,e,n])=>`<button data-tab="${k}" class="${k===tab?'on':''}" aria-label="${n}"><span>${e}</span><b>${n}</b></button>`).join('')}</nav>
- <main><div class="top"><div class="stat crs">📈 Stocks</div><div class="stat fire ${S.lastDay===day()?'':'off'}" title="Day streak">🔥 ${streakNow()}</div>${boosted()?'<div class="stat" title="Double XP active">⚡2x</div>':''}${S.freezes?`<div class="stat" title="Streak freezes">🧊 ${S.freezes}</div>`:''}<div class="stat coin" title="Coins">${COIN} ${S.coins}</div><div class="stat heart" title="Hearts">❤️ ${S.hearts}</div></div>${({learn,practice,league,quests,shop,profile})[tab]()}</main>
- <aside class="side">${goalCard()}${questCard(1)}${skillsCard()}</aside></div>`;
+ <main><div class="top"><div class="stat crs">📈 Stocks</div><div class="stat fire ${S.lastDay===day()?'':'off'}" title="Day streak">🔥 ${streakNow()}</div>${boosted()?'<div class="stat" title="Double XP active">⚡2x</div>':''}${S.freezes?`<div class="stat" title="Streak freezes">🧊 ${S.freezes}</div>`:''}<div class="stat coin" title="Coins">${COIN} ${S.coins}</div><div class="stat heart" title="Hearts">❤️ ${S.hearts}</div></div>${({learn,practice,fund,league,shop,profile})[tab]()}</main>
+ <aside class="side">${goalCard()}${questCard(1)}${cowCard()}${skillsCard()}</aside></div>`;
  $$('[data-tab]').forEach(b=>b.onclick=()=>{SFX.tap();if(b.dataset.tab!==tab){tab='';go(b.dataset.tab);scrollTo(0,0)}});
  animateChips($('#app'));
  if(same)scrollTo(0,sy);else gsap.from('main > :not(.top)',{y:12,opacity:0,duration:.3,stagger:.04,ease:'power2.out'});
@@ -460,27 +483,32 @@ function skillsCard(){const t=Object.keys(S.mastery);return `<div class="card"><
 
 /* quests */
 const QUESTS=[['xp','⚡','Earn 30 XP',30,15],['lessons','📚','Complete 2 lessons',2,15],['perfects','💎','Get a perfect lesson',1,20]];
-function questCard(mini){const q=Q();return `<div class="card"><h3>Daily Quests</h3>${QUESTS.map(([k,e,n,m,r])=>{const v=Math.min(q[k],m),got=q.claimed.includes(k);return `<div class="quest"><span>${e}</span><div><b>${n}</b><div class="sbar"><i style="width:${Math.max(4,v/m*100)}%;background:var(--gold)"></i></div><small class="muted">${v} / ${m}</small></div>${mini?(got?'✅':v>=m?'🎁':''):got?'<button class="btn ghost" disabled>Claimed</button>':`<button class="btn gold" data-claim="${k}" ${v<m?'disabled':''}>${COIN} ${r}</button>`}</div>`}).join('')}</div>`}
-function quests(){return `<div class="pagehead"><div><h1>Quests</h1><p class="muted">New quests every day · claim chests for coins</p></div></div>${questCard()}
- <div class="card" style="margin-top:16px"><h3>Weekly XP</h3><p style="font-size:28px;margin-top:6px">⚡ ${weekXP()}</p><p class="muted">Resets every Monday. Compete with friends in Leagues!</p></div>`}
+function questCard(mini){const q=Q();return `<div class="card">${mini?'<h3>Daily Quests</h3>':''}${QUESTS.map(([k,e,n,m,r])=>{const v=Math.min(q[k],m),got=q.claimed.includes(k);return `<div class="quest"><span>${e}</span><div><b>${n}</b><div class="sbar"><i style="width:${Math.max(4,v/m*100)}%;background:var(--gold)"></i></div><small class="muted">${v} / ${m}</small></div>${mini?(got?'✅':v>=m?'🎁':''):got?'<button class="btn ghost" disabled>Claimed</button>':`<button class="btn gold" data-claim="${k}" ${v<m?'disabled':''}>${COIN} ${r}</button>`}</div>`}).join('')}</div>`}
+
 function claim(k){const q=Q(),x=QUESTS.find(z=>z[0]===k);if(!x||q.claimed.includes(k)||q[k]<x[3])return;q.claimed.push(k);S.coins+=x[4];save();SFX.coin();go()}
 
 /* leagues & friends */
 let FR=null; // cached friend profiles for this session
-function league(){if(!user)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Sign in to add friends</h2><p class="muted">Follow friends and race them on the weekly leaderboard.</p></div></div>`;
- if(!S.username)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Pick a username first</h2><p class="muted">Friends find you by username.</p><button class="btn" id="setU" style="margin-top:10px">Edit profile</button></div></div>`;
- if(!S.social)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Ask a grown-up first</h2><p class="muted">Turning on friends shares your username, avatar, XP and streak with other signed-in learners. Your real name and bio stay private.</p>
-  <label class="optin"><input type="checkbox" id="pok"> A parent or guardian says it’s OK</label><button class="btn" id="son" disabled>Turn on friends</button></div></div>`;
+function league(){return `<div class="pagehead"><div><h1>Leagues</h1><p class="muted">Weekly XP races · reset every Monday</p></div></div>`+classBoard()+friendsBoard()}
+function friendsBoard(){const H='<h2 class="sec">🤝 Friends</h2>';if(!user)return H+`<div class="hero">${chip(110)}<div><h2>Sign in to add friends</h2><p class="muted">Follow friends and race them on the weekly leaderboard.</p></div></div>`;
+ if(!S.username)return H+`<div class="hero">${chip(110)}<div><h2>Pick a username first</h2><p class="muted">Friends find you by username.</p><button class="btn" id="setU" style="margin-top:10px">Edit profile</button></div></div>`;
+ if(!S.social)return H+`<div class="hero">${chip(110)}<div><h2>Ask a grown-up first</h2><p class="muted">Turning on friends shares your username, avatar, XP and streak with other signed-in learners. Your real name and bio stay private.</p>
+  ${S.parentEmail?(parentOK?`<button class="btn" id="son" style="margin-top:10px">Turn on friends</button>`:`<p class="note">Waiting for ${esc(S.parentEmail)} to allow friends in the Chip parent dashboard.</p><button class="btn ghost" id="pchk" style="margin-top:10px">Check again</button>`)
+  :`<label class="optin"><input type="checkbox" id="pok"> A parent or guardian says it’s OK</label><button class="btn" id="son" disabled>Turn on friends</button>`}</div></div>`;
  const me={uid:user.uid,...pub(),me:1},rows=[me,...new Map((FR||[]).filter(f=>S.friends.includes(f.uid)).map(f=>[f.uid,f])).values()].map(f=>({...f,w:f.weekId===wk()?f.weekXp:0})).sort((a,b)=>b.w-a.w);
- return `<div class="pagehead"><div><h1>Weekly League</h1><p class="muted">Ranked by XP this week · you are @${esc(S.username)}</p></div></div>
- <div class="card"><h3>Add friends</h3><div class="srow"><input class="name" id="fq" placeholder="Search username" autocomplete="off"><button class="btn" id="fgo">Follow</button></div><p class="err" id="ferr"></p></div>
+ return H+`<div class="card"><h3>Add friends</h3><p class="note">You are @${esc(S.username)}</p><div class="srow"><input class="name" id="fq" placeholder="Search username" autocomplete="off"><button class="btn" id="fgo">Follow</button></div><p class="err" id="ferr"></p></div>
  <div class="list" style="margin-top:16px">${FR?rows.map((f,i)=>`<div class="fr ${f.me?'me':''}"><b class="rk">${['🥇','🥈','🥉'][i]||i+1}</b><span class="fa">${esc(f.avatar||'🐂')}</span><div><b>@${esc(f.username)}</b><br><small class="muted">🔥 ${f.streak||0}</small></div><b>${f.w} XP</b>${f.me?'':`<button class="unf" data-unf="${f.uid}" title="Unfollow" aria-label="Unfollow @${esc(f.username)}">✕</button>`}</div>`).join(''):'<p class="muted" style="padding:16px 0">Loading friends…</p>'}</div>
  <p class="muted" style="margin-top:12px">${S.friends.length} following · <span id="fols">… followers</span></p>`}
+let CLS=null,CM=null; // the joined class doc and its members, cached per session
+function classBoard(){if(!user||!S.classCode)return '';const me={uid:user.uid,...(mem()||[])[1],me:1};
+ const rows=CM?[me,...CM.filter(m=>m.uid!==user.uid)].map(m=>({...m,w:m.weekId===wk()?m.weekXp:0})).sort((a,b)=>b.w-a.w):null;
+ return `<h2 class="sec">🏫 ${esc(CLS?.name||'My class')}</h2><div class="list">${rows?rows.map((m,i)=>`<div class="fr ${m.me?'me':''}"><b class="rk">${['🥇','🥈','🥉'][i]||i+1}</b><span class="fa">${esc(m.avatar||'🐂')}</span><div><b>${esc(m.name||'Student')}</b><small class="muted">🔥 ${m.streak||0} · ${m.lessons||0} lessons</small></div><b>${m.w} XP</b></div>`).join(''):'<p class="muted" style="padding:16px 0">Loading class…</p>'}</div>`}
+async function loadClass(){try{CLS=await cloud.getClass(S.classCode);if(!CLS){S.classCode='';save()}else CM=await cloud.members(S.classCode)}catch(e){console.error(e);CM=[]}if($('.shell'))go()}
 async function loadFriends(){try{FR=await cloud.profiles(S.friends)}catch(e){console.error(e);FR=[]}if(tab==='league')go()}
 
 const OFF=[0,52,78,52,0,-52,-78,-52];
 const canJump=(l,cur)=>l.check&&S.level>0&&!S.done[l.id]&&LESSON[cur]?.ch===l.ch;
-function learn(){const cur=curLesson();return COURSE.map((ch,ci)=>`<section class="unit"><div class="banner" style="--c:${ch.color};--c2:${ch.c2}"><div><small>CHAPTER ${ci+1}</small><h2>${ch.title}</h2><p>${ch.sub}</p><div class="bprog"><i><b style="width:${ch.lessons.filter(l=>S.done[l.id]).length/ch.lessons.length*100}%"></b></i>${ch.lessons.filter(l=>S.done[l.id]).length} / ${ch.lessons.length}</div></div><div class="bicon">${ch.icon}</div></div>
+function learn(){const cur=curLesson();return COURSE.map((ch,ci)=>`<section class="unit"><div class="banner" style="--c:${ch.color};--c2:${ch.c2}"><div><small>CHAPTER ${ci+1}</small><h2>${ch.title}</h2><p>${ch.sub}</p>${CLS?.assigned?.includes(ci)?`<span class="asg">📌 Assigned by ${esc(CLS.name)}</span>`:''}<div class="bprog"><i><b style="width:${ch.lessons.filter(l=>S.done[l.id]).length/ch.lessons.length*100}%"></b></i>${ch.lessons.filter(l=>S.done[l.id]).length} / ${ch.lessons.length}</div></div><div class="bicon">${ch.icon}</div></div>
  <div class="path"><div class="pmascot" style="${ci%2?'right':'left'}:4%">${chip(120)}</div>${ch.lessons.map((l,li)=>{const st=S.done[l.id]?'done':l.id===cur?'cur':canJump(l,cur)?'jump':'lock';
  return `<div class="row" style="--x:${OFF[(li+ci*4)%8]}px;--c:${ch.color};--d:${ch.dark}">${st==='cur'?'<div class="start">Start</div>':st==='jump'?'<div class="start gold">Jump here?</div>':''}<button class="node ${st}" data-id="${l.id}" aria-label="${l.title}">${l.check?'<span class="tro">🏆</span>':st==='done'?ICO.check:ICO.star}</button></div>`}).join('')}</div></section>`).join('')+(FLAT.every(l=>S.done[l.id])?`<div class="card fincard">${chip(110)}<div><h3>You finished every chapter! 🎉</h3><p class="muted">New chapters are on the way. Keep your streak alive in the Practice tab!</p></div></div>`:'')}
 function afterLearn(){drawTrails();gsap.to('.start',{y:-6,duration:.8,repeat:-1,yoyo:true,ease:'sine.inOut'});
@@ -500,23 +528,24 @@ const bind={learn(){$$('.node').forEach(n=>n.onclick=e=>{e.stopPropagation();SFX
   n.parentNode.appendChild(p);p.scrollIntoView({block:'nearest',behavior:'smooth'});gsap.from(p,{scale:.7,opacity:0,y:-10,duration:.35,ease:'back.out(2)'});
   if(st!=='lock')p.querySelector('.btn').onclick=()=>startLesson(l.id)});
  document.onclick=()=>$$('.pop').forEach(p=>p.remove())},
- league(){$('#setU')&&($('#setU').onclick=editProfile);if($('#son')){$('#pok').onchange=e=>$('#son').disabled=!e.target.checked;$('#son').onclick=()=>{S.social=true;save();go()}}if(!user||!S.username||!S.social)return;if(!FR)loadFriends();
+ league(){if(user&&S.classCode&&!CM)loadClass();$('#setU')&&($('#setU').onclick=editProfile);$('#pchk')&&($('#pchk').onclick=()=>cloud.load(user.uid).then(r=>{parentOK=!!r?.parentOK;go()}));if($('#son')){$('#pok')&&($('#pok').onchange=e=>$('#son').disabled=!e.target.checked);$('#son').onclick=()=>{S.social=true;save();go()}}if(!user||!S.username||!S.social)return;if(!FR)loadFriends();
   cloud.followers(user.uid).then(n=>{const e=$('#fols');if(e)e.textContent=n+' followers'}).catch(()=>{});
   const fq=$('#fq'),err=$('#ferr');fq.onkeydown=e=>e.key==='Enter'&&$('#fgo').click();
   $('#fgo').onclick=async()=>{const u=fq.value.trim().toLowerCase().replace(/^@/,'');if(!u)return;err.textContent='';
    try{const f=await cloud.findUser(u);if(!f)return err.textContent='No one with that username.';if(f.uid===user.uid)return err.textContent='That’s you! 🐂';if(S.friends.includes(f.uid))return err.textContent='Already following.';
     S.friends=[...S.friends,f.uid];FR=[...(FR||[]),f];save();SFX.coin();go()}catch(e){console.error(e);err.textContent='Couldn’t search right now.'}};
   $$('[data-unf]').forEach(b=>b.onclick=()=>{S.friends=S.friends.filter(x=>x!==b.dataset.unf);FR=FR.filter(f=>f.uid!==b.dataset.unf);save();go()})},
- quests(){$$('[data-claim]').forEach(b=>b.onclick=()=>claim(b.dataset.claim))},
- practice(){$('#goP')&&($('#goP').onclick=()=>startLesson('practice'))},
+ practice(){$('#goP')&&($('#goP').onclick=()=>startLesson('practice'));$$('[data-claim]').forEach(b=>b.onclick=()=>claim(b.dataset.claim))},
+ fund(){bindFund()},
  shop(){$$('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy))},
- profile(){$('#snd').onclick=()=>{S.sound=!S.sound;save();go()};$('#so').onclick=()=>window.cloud?.signOut();$('#emo').onclick=()=>{S.emailOptIn=!S.emailOptIn;save();go()};$('#edp').onclick=editProfile;$('#soc')&&($('#soc').onclick=()=>{if(!S.social)return go('league');S.social=false;FR=null;save();cloud.deleteProfile(user.uid).catch(console.error);go()});$('#thm').onclick=()=>{const t=['light','dark','auto'];S.theme=t[(t.indexOf(S.theme)+1)%3];save();go()};$$('[data-acc]').forEach(b=>b.onclick=()=>{S.accent=+b.dataset.acc;save();go()});$('#gl').onclick=()=>{const g=[10,20,30,50];S.goal=g[(g.indexOf(S.goal)+1)%4];save();go()};
-  $('#rst').onclick=e=>{if(e.target.dataset.ok){S={...blank(),name:S.name,username:S.username,avatar:S.avatar,bio:S.bio,social:S.social,friends:S.friends,theme:S.theme,accent:S.accent,goal:S.goal,joined:S.joined,emailOptIn:S.emailOptIn,heartsAt:Date.now()};save();go()}else{e.target.dataset.ok=1;e.target.textContent='Tap again to erase everything'}}}};
+ profile(){$('#snd').onclick=()=>{S.sound=!S.sound;save();go()};$('#so').onclick=()=>window.cloud?.signOut();$('#emo').onclick=()=>{S.emailOptIn=!S.emailOptIn;save();go()};$('#edp').onclick=editProfile;$('#tts').onclick=()=>{S.tts=!S.tts;save();go();if(S.tts)say('Hi! I will read questions out loud.')};$('#inst')&&($('#inst').onclick=install);$('#psh')&&($('#psh').onclick=togglePush);$('#par')&&($('#par').onclick=editParent);$('#cls')&&($('#cls').onclick=()=>S.classCode?leaveClass():joinClass());$('#soc')&&($('#soc').onclick=()=>{if(!S.social)return go('league');S.social=false;FR=null;save();cloud.deleteProfile(user.uid).catch(console.error);go()});$('#thm').onclick=()=>{const t=['light','dark','auto'];S.theme=t[(t.indexOf(S.theme)+1)%3];save();go()};$$('[data-acc]').forEach(b=>b.onclick=()=>{S.accent=+b.dataset.acc;save();go()});$('#gl').onclick=()=>{const g=[10,20,30,50];S.goal=g[(g.indexOf(S.goal)+1)%4];save();go()};
+  $('#rst').onclick=e=>{if(e.target.dataset.ok){S={...blank(),name:S.name,username:S.username,avatar:S.avatar,bio:S.bio,social:S.social,friends:S.friends,parentEmail:S.parentEmail,classCode:S.classCode,tts:S.tts,theme:S.theme,accent:S.accent,goal:S.goal,joined:S.joined,emailOptIn:S.emailOptIn,heartsAt:Date.now()};save();go()}else{e.target.dataset.ok=1;e.target.textContent='Tap again to erase everything'}}}};
 
 /* practice */
 function practice(){const n=Object.keys(S.done).length,w=weakTags().slice(0,3);return `<div class="pagehead"><div><h1>Practice Hub</h1><p class="muted">Personalized review · no hearts lost · +1 ❤️</p></div></div>
  <div class="hero">${chip(110)}<div><h2>${n?`Hey ${esc(S.name)}! I made you a workout 💪`:'Finish your first lesson!'}</h2><p class="muted">${n?'I picked the questions you need most, based on what you’ve missed and what’s due for review.':'Then I’ll build practice sessions just for you.'}</p></div></div>
  ${n?`<div class="card"><h3>Focus skills</h3>${w.map(k=>{const s=strength(k);return `<div class="skill"><b>${TAGS[k]}</b><div class="sbar"><i style="width:${Math.max(6,s*100)}%;background:${s>.6?'var(--ok)':s>.2?'var(--gold)':'var(--bad)'}"></i></div></div>`}).join('')}<button class="btn wide" id="goP" style="margin-top:14px">Start practice +10 XP</button></div>`:''}
+ <h2 class="sec">Daily quests</h2>${questCard()}<div class="card" style="margin-top:12px"><h3>Weekly XP</h3><p class="big" style="margin-top:4px">⚡ ${weekXP()}</p><p class="muted">Resets every Monday. Race friends and classmates in Leagues!</p></div>
  <div class="mob" style="margin-top:16px">${goalCard()}</div>`}
 
 /* shop */
@@ -540,13 +569,19 @@ function buy(id){const i=SHOP.find(x=>x.id===id)||POWER.find(x=>x.id===id);
 
 /* profile */
 function profile(){const c1=COURSE[0].lessons.filter(l=>S.done[l.id]).length;
- const A=[['🎓','First Steps','Finish your first lesson',S.lessons,1],['🔥','On Fire','Reach a 3-day streak',S.best,3],['💎','Perfectionist','Get 3 perfect lessons',S.perfects,3],['⚡','XP Hunter','Earn 200 XP',S.xp,200],['🏆','Chapter Champ','Finish Chapter 1',c1,COURSE[0].lessons.length],['🗺️','Explorer','Finish 5 chapters',COURSE.filter(c=>c.lessons.every(l=>S.done[l.id])).length,5],['🤝','Social Investor','Follow 3 friends',S.friends.length,3],['🐂','Bull Market','Finish every chapter',Object.keys(S.done).length,FLAT.length]];
+ const A=[['🎓','First Steps','Finish your first lesson',S.lessons,1],['🔥','On Fire','Reach a 3-day streak',S.best,3],['💎','Perfectionist','Get 3 perfect lessons',S.perfects,3],['⚡','XP Hunter','Earn 200 XP',S.xp,200],['🏆','Chapter Champ','Finish Chapter 1',c1,COURSE[0].lessons.length],['🗺️','Explorer','Finish 5 chapters',COURSE.filter(c=>c.lessons.every(l=>S.done[l.id])).length,5],['🤝','Social Investor','Follow 3 friends',S.friends.length,3],['📈','First Investment','Buy a stock in Chip’s Fund',S.fund.n,1],['🧺','Diversified','Own 5 different companies',Object.keys(S.fund.h).length,5],['🐂','Bull Market','Finish every chapter',Object.keys(S.done).length,FLAT.length]];
  return `<div class="hero ph"><span class="av">${esc(S.avatar)}</span><div class="grow"><h2>${esc(S.name)}</h2>${S.username?`<p class="muted">@${esc(S.username)}</p>`:''}${S.bio?`<p style="margin:4px 0">${esc(S.bio)}</p>`:''}<p class="muted">${S.friends.length} following · Joined ${new Date(S.joined+'T00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'})}</p><div class="acts"><button class="btn ghost" id="edp">✏️ Edit profile</button></div></div>${chip(90)}</div>
  <h2 class="sec">Statistics</h2><div class="grid2">${[['🔥',streakNow(),'Day streak'],['⚡',S.xp,'Total XP'],['📚',S.lessons,'Lessons done'],['💎',S.perfects,'Perfect lessons']].map(([e,v,l])=>`<div class="sc2"><span>${e}</span><div><b>${v}</b><small>${l}</small></div></div>`).join('')}</div>
  <h2 class="sec">Achievements</h2><div class="list">${A.map(([e,n,d,v,m])=>`<div class="ach ${v>=m?'':'no'}"><span class="ae">${e}</span><div><h3>${n}</h3><p class="muted">${d}</p><div class="sbar"><i style="width:${Math.min(100,v/m*100)}%;background:var(--gold)"></i></div></div><b>${Math.min(v,m)}/${m}</b></div>`).join('')}</div>
  <h2 class="sec">Account</h2><div class="list"><div class="toggle"><b>${esc(user?.email||'Not signed in')}</b><button class="btn ghost" id="so">Sign out</button></div>
- <div class="toggle"><div><b>Streak emails</b><p class="muted" style="font-size:14px">Reminders before your streak ends</p></div><button class="btn ghost" id="emo">${S.emailOptIn?'On 📬':'Off'}</button></div></div>
+ <div class="toggle"><div><b>Streak emails</b><p class="muted" style="font-size:14px">Reminders before your streak ends</p></div><button class="btn ghost" id="emo">${S.emailOptIn?'On 📬':'Off'}</button></div>
+ ${user?`<div class="toggle"><div><b>Parent or guardian</b><p class="muted" style="font-size:14px">${S.parentEmail?esc(S.parentEmail)+' gets weekly updates':'Share progress with a grown-up'}</p></div><button class="btn ghost" id="par">${S.parentEmail?'Change':'Add'}</button></div>
+ <div class="toggle"><div><b>Class</b><p class="muted" style="font-size:14px">${S.classCode?esc(CLS?.name||S.classCode)+' · code '+esc(S.classCode):'Join your teacher’s class'}</p></div><button class="btn ghost" id="cls">${S.classCode?'Leave':'Join'}</button></div>`:''}
+ <div class="toggle"><div><b>Parents & teachers</b><p class="muted" style="font-size:14px">Progress dashboard and classes</p></div><a class="btn ghost" href="dashboard.html" style="min-width:0;font-size:15px;padding:10px 16px">Open</a></div></div>
  <h2 class="sec">Settings</h2><div class="list"><div class="toggle"><b>Sound effects</b><button class="btn ghost" id="snd">${S.sound?'On 🔊':'Off 🔇'}</button></div>
+ <div class="toggle"><div><b>Read questions aloud</b><p class="muted" style="font-size:14px">Chip reads each question to you</p></div><button class="btn ghost" id="tts">${S.tts?'On 🗣️':'Off'}</button></div>
+ ${standalone()?'':`<div class="toggle"><div><b>Install the app</b><p class="muted" style="font-size:14px">Add Chip to your home screen</p></div><button class="btn ghost" id="inst">Install</button></div>`}
+ ${pushOK()?`<div class="toggle"><div><b>Streak reminders</b><p class="muted" style="font-size:14px">${isIOS&&!standalone()?'On iPhone, install the app first':'A nudge before your streak ends'}</p></div><button class="btn ghost" id="psh" ${isIOS&&!standalone()?'disabled':''}>${pushTok()?'On 🔔':'Off'}</button></div>`:''}
  <div class="toggle"><b>Daily goal</b><button class="btn ghost" id="gl">${S.goal} XP</button></div>
  <div class="toggle"><b>Theme</b><button class="btn ghost" id="thm">${{light:'☀️ Light',dark:'🌙 Dark',auto:'🌓 Auto'}[S.theme]}</button></div>
  <div class="toggle"><b>Accent color</b><div class="accs">${ACCENTS.map((a,i)=>`<button data-acc="${i}" class="${S.accent===i?'sel':''}" style="background:${a[0]}" aria-label="Accent ${i+1}"></button>`).join('')}</div></div>
@@ -554,6 +589,61 @@ function profile(){const c1=COURSE[0].lessons.filter(l=>S.done[l.id]).length;
  <div class="toggle"><b>Streak freezes</b><span>🧊 ${S.freezes} / 2</span></div>
  <div class="toggle"><b>Reset progress</b><button class="btn red" id="rst">Reset</button></div></div>
  <div class="mob" style="margin-top:20px">${skillsCard()}</div>`}
+
+/* Chip's Fund: invest coins in real companies at daily closing prices (1 coin = $1) */
+let PR=null;fetch('prices.json').then(r=>r.json()).then(j=>{PR=j;if(['fund','learn'].includes(tab)&&$('.shell'))go()}).catch(()=>{});
+const px=t=>PR?.p?.[t]?.at(-1)||0,chg=t=>{const a=PR?.p?.[t];return a&&a.length>21?(a.at(-1)/a.at(-22)-1)*100:0};
+const CO=t=>COMPANIES.find(c=>c[0]===t),fundOpen=()=>COURSE[1].lessons.every(l=>S.done[l.id]);
+function fundStats(){let v=0,c=0;for(const[t,x]of Object.entries(S.fund?.h||{})){v+=x.sh*px(t);c+=x.cost}return{value:Math.round(v),cost:Math.round(c)}}
+const pct=n=>`<span class="${n>=0?'up':'dn'}">${n>=0?'▲':'▼'} ${Math.abs(n).toFixed(1)}%</span>`;
+function spark(a,w=110,h=34){if(!a?.length)return '';const lo=Math.min(...a),hi=Math.max(...a),r=hi-lo||1;return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline fill="none" stroke="${a.at(-1)>=a[0]?'var(--ok)':'var(--bad)'}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${a.map((v,i)=>`${(i/(a.length-1)*w).toFixed(1)},${(h-3-(v-lo)/r*(h-6)).toFixed(1)}`).join(' ')}"/></svg>`}
+const cow=()=>COMPANIES[Math.floor((Date.now()/864e5+3)/7)%COMPANIES.length]; // changes every Monday
+function cowCard(){const[t,n,e,about,fact]=cow();return `<div class="card"><h3>Company of the week</h3><div class="co" style="padding-bottom:4px"><span class="ae">${e}</span><div><b>${n}</b><br><small>${t}${PR?' · $'+px(t).toFixed(2):''}</small></div></div><p class="muted" style="font-size:14px">${about}</p><p class="note">💡 ${fact}</p></div>`}
+function fund(){const head=`<div class="pagehead"><div><h1>Chip’s Fund</h1><p class="muted">Invest your coins in real companies · prices update every weekday</p></div></div>`;
+ if(!fundOpen())return head+`<div class="hero">${chip(110)}<div><h2>Unlocks after Chapter 2</h2><p class="muted">Finish “The Stock Market” and you can invest your coins in real companies like Apple and Nike.</p></div></div>${cowCard()}`;
+ if(!PR)return head+'<p class="muted">Loading prices…</p>';
+ const st=fundStats(),gain=st.value-st.cost,H=Object.entries(S.fund.h),top=H.map(([t,x])=>x.sh*px(t)).sort((a,b)=>b-a)[0]||0;
+ return head+(PR.sample?'<div class="tip">🧪 <span>These are sample prices. Real closing prices arrive with the first daily update.</span></div>':'')+
+ `<div class="card" style="margin-top:12px"><small class="muted">PORTFOLIO VALUE</small><div class="big">${COIN} ${st.value}</div><p>${st.cost?`${gain>=0?'+':''}${gain} coins ${pct(st.cost?gain/st.cost*100:0)} <span class="muted">since you bought</span>`:'<span class="muted">You haven’t invested yet. Tap a company to buy.</span>'}</p><p class="note">${COIN} ${S.coins} coins ready to invest · ${PR.source||'Prices'} close of ${PR.updated}</p>
+ ${H.length&&st.value&&top/st.value>.6?'<div class="tip">🧺 <span>Most of your money is in one company. Spreading it across several protects you if one has a bad year.</span></div>':''}</div>
+ ${H.length?`<h2 class="sec">Your investments</h2><div class="list">${H.map(([t,x])=>{const[,n,e]=CO(t)||[t,t,'📈'],v=x.sh*px(t);return `<button class="co" data-co="${t}"><span class="ae">${e}</span><div><b>${n}</b><br><small>${(x.sh).toFixed(3)} shares</small></div><div class="px"><b>${COIN} ${Math.round(v)}</b>${pct((v/x.cost-1)*100)}</div></button>`}).join('')}</div>`:''}
+ <h2 class="sec">Companies</h2><div class="list">${COMPANIES.filter(c=>px(c[0])).map(([t,n,e])=>`<button class="co" data-co="${t}"><span class="ae">${e}</span><div><b>${n}</b><br><small>${t}</small></div>${spark(PR.p[t])}<div class="px"><b>$${px(t).toFixed(2)}</b>${pct(chg(t))}</div></button>`).join('')}</div>
+ <p class="note" style="margin-top:12px">Pretend money only. 1 coin = $1. Changes show the last month.</p><div style="margin-top:16px">${cowCard()}</div>`}
+function bindFund(){$$('[data-co]').forEach(b=>b.onclick=()=>{SFX.tap();coModal(b.dataset.co)})}
+function coModal(t){const[,n,e,about,fact]=CO(t),h=S.fund.h[t],v=h?Math.floor(h.sh*px(t)):0,m=document.createElement('div');m.className='modal';
+ m.innerHTML=`<div><span class="ae" style="background:var(--soft);font-size:34px">${e}</span><h2>${n}</h2><p class="muted">${t} · $${px(t).toFixed(2)} ${pct(chg(t))}</p>${spark(PR.p[t],280,70)}<p style="font-size:15px">${about}</p><p class="note">💡 ${fact}</p>
+ <b style="margin-top:6px">Invest coins</b><div class="amts">${[10,25,50,100].map(a=>`<button class="btn gold" data-amt="${a}" ${S.coins<a?'disabled':''}>${a}</button>`).join('')}</div>
+ ${h?`<p>You own ${h.sh.toFixed(3)} shares worth ${COIN} ${v} (${pct((h.sh*px(t)/h.cost-1)*100)})</p><button class="btn ghost wide" id="sell">Sell all for ${v} coins</button>`:''}<button class="link" id="cx">Close</button></div>`;
+ document.body.appendChild(m);gsap.from(m.firstChild,{yPercent:100,duration:.35,ease:'power3.out'});$('#cx',m).onclick=()=>m.remove();
+ $$('[data-amt]',m).forEach(b=>b.onclick=()=>{const a=+b.dataset.amt;if(S.coins<a)return;S.coins-=a;const x=S.fund.h[t]||{sh:0,cost:0};x.sh+=a/px(t);x.cost+=a;S.fund.h[t]=x;S.fund.n++;track('fund_buy');save();SFX.coin();m.remove();go()});
+ $('#sell',m)&&($('#sell',m).onclick=()=>{S.coins+=v;delete S.fund.h[t];save();SFX.coin();m.remove();go()})}
+
+/* read aloud (browser speech, no network) */
+function say(t){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t).replace(/<[^>]+>/g,' ').replace(/\p{Extended_Pictographic}/gu,'').replace(/\s+/g,' ').trim());u.rate=.95;speechSynthesis.speak(u)}catch{}}
+const readItem=it=>it.t==='info'?it.title+'. '+it.text:it.t==='mc'?(it.tf?'True or false? ':'')+it.q+(it.tf?'':'. '+it.opts.map(o=>o.l).join(', ')):it.t==='build'?it.q:'Tap the matching pairs.';
+
+/* install + push */
+let DEFER=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();DEFER=e});addEventListener('appinstalled',()=>{DEFER=null;track('install',1)});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+const pushOK=()=>!!(user&&self.FIREBASE_VAPID_KEY&&'Notification' in window&&'serviceWorker' in navigator),pushTok=()=>{try{return localStorage.getItem('chip-push')}catch{}};
+function install(){if(DEFER){DEFER.prompt();DEFER=null;return}
+ const m=document.createElement('div');m.className='modal';m.innerHTML=`<div><span style="font-size:48px">📲</span><h2>Add Chip to your home screen</h2><p class="muted">${isIOS?'In Safari, tap the Share button <b>⬆️</b>, then <b>Add to Home Screen</b>.':'Open your browser menu <b>⋮</b> and choose <b>Install app</b> or <b>Add to Home screen</b>.'}</p><button class="btn wide" id="ok">Got it</button></div>`;
+ document.body.appendChild(m);$('#ok',m).onclick=()=>m.remove()}
+async function togglePush(){const t=pushTok();try{if(t){await cloud.pushOff(user.uid,t);localStorage.removeItem('chip-push')}else{if(await Notification.requestPermission()!=='granted')return;localStorage.setItem('chip-push',await cloud.pushOn(user.uid));track('push_on',1)}}catch(e){console.error(e)}go()}
+
+/* parent link + classroom */
+let parentOK=false; // set by the parent dashboard; read-only for the kid
+function editParent(){const m=document.createElement('div');m.className='modal';
+ m.innerHTML=`<div><span style="font-size:48px">👨‍👩‍👧</span><h2>Parent or guardian</h2><p class="muted">They’ll see your progress in the Chip dashboard and get a weekly email. They need to sign in with this email.</p><label><span>Their email</span><input class="name" id="pe" type="email" value="${esc(S.parentEmail)}" placeholder="grownup@example.com"></label><p class="err" id="perr"></p><button class="btn wide" id="psv">Save</button>${S.parentEmail?'<button class="link" id="prm">Remove</button>':''}<button class="link" id="pcx">Cancel</button></div>`;
+ document.body.appendChild(m);$('#pcx',m).onclick=()=>m.remove();$('#prm',m)&&($('#prm',m).onclick=()=>{S.parentEmail='';save();m.remove();go()});
+ $('#psv',m).onclick=()=>{const v=$('#pe',m).value.trim().toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v))return $('#perr',m).textContent='That email doesn’t look right.';if(v===user?.email?.toLowerCase())return $('#perr',m).textContent='That’s your own email. Use a grown-up’s.';S.parentEmail=v;save();SFX.coin();m.remove();go()}}
+function joinClass(){const m=document.createElement('div');m.className='modal';
+ m.innerHTML=`<div><span style="font-size:48px">🏫</span><h2>Join a class</h2><p class="muted">Your teacher will see your first name, progress and weekly XP. Classmates see your first name and XP.</p><label><span>Class code</span><input class="name" id="cc" maxlength="6" placeholder="ABC123" style="text-transform:uppercase;letter-spacing:3px"></label><p class="err" id="cerr"></p><button class="btn wide" id="cj">Join</button><button class="link" id="ccx">Cancel</button></div>`;
+ document.body.appendChild(m);$('#ccx',m).onclick=()=>m.remove();
+ $('#cj',m).onclick=async()=>{const c=$('#cc',m).value.trim().toUpperCase(),err=$('#cerr',m);if(!/^[A-Z0-9]{6}$/.test(c))return err.textContent='Codes are 6 letters and numbers.';
+  try{const k=await cloud.getClass(c);if(!k)return err.textContent='No class with that code.';CLS=k;CM=null;S.classCode=c;save();track('class_join',1);SFX.coin();m.remove();go()}catch(e){console.error(e);err.textContent='Couldn’t join right now.'}}}
+function leaveClass(){const c=S.classCode;S.classCode='';CLS=CM=null;save();cloud.leaveClass(c,user.uid).catch(console.error);go()}
 
 const AVATARS=['🐂','🐻','🦊','🐼','🦁','🐯','🐸','🐵','🦉','🐙','🦄','🐲','🚀','💎','🌟','🧑‍💼'];
 function editProfile(){const m=document.createElement('div');m.className='modal';let av=S.avatar;
@@ -590,20 +680,20 @@ function onboard(step=0,mode='up'){loops.forEach(x=>x.kill());loops=[];const a=$
   gsap.from(c,{scale:0,rotation:-15,duration:.9,ease:'elastic.out(1,.5)'});gsap.from('.wbox > :not(.chip)',{y:24,opacity:0,stagger:.1,delay:.3,duration:.5,ease:'back.out(1.7)'});
   $$('.float').forEach((f,i)=>loops.push(gsap.to(f,{y:-18,rotation:i%2?12:-12,duration:2+i*.3,repeat:-1,yoyo:true,ease:'sine.inOut'})));
   loops.push(gsap.timeline({repeat:-1,repeatDelay:2.5,delay:1}).call(()=>wave(c)));
-  $('#nx').onclick=()=>{SFX.tap();onboard(1)};$('#have').onclick=()=>{SFX.tap();onboard(4,'in')};return}
+  track('welcome',1);$('#nx').onclick=()=>{SFX.tap();onboard(1)};$('#have').onclick=()=>{SFX.tap();onboard(4,'in')};return}
  if(step===4)return authStep(mode);
  if(step===1){obShell(1,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><input class="name" id="nm" maxlength="20" placeholder="Your first name" autocomplete="off" value="${esc(S.name)}"><p class="muted" style="margin-top:10px;font-size:14px">Just your first name, no last names!</p>`,'Continue');
   const nx=$('#nx'),nm=$('#nm');typeIn($('#bb'),'Hi there! I’m Chip 🐂 What should I call you?');
   const upd=()=>nx.disabled=!nm.value.trim();upd();nm.focus();nm.oninput=upd;nm.onkeydown=e=>{if(e.key==='Enter')!nx.disabled&&nx.click()};
-  nx.onclick=()=>{SFX.tap();S.name=nm.value.trim();onboard(2)};return}
+  nx.onclick=()=>{SFX.tap();S.name=nm.value.trim();track('ob_name',1);onboard(2)};return}
  if(step===2){obShell(2,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><div class="opts">${LEVELS.map(([e,n],i)=>`<button class="opt ${S.level===i?'sel':''}" data-l="${i}"><span class="oe sm">${e}</span><b>${n}</b></button>`).join('')}</div>`,'Continue');
   typeIn($('#bb'),`Nice to meet you, ${S.name}! How much do you know about stocks?`);
   $$('[data-l]').forEach(b=>b.onclick=()=>{SFX.tap();S.level=+b.dataset.l;$$('[data-l]').forEach(x=>x.classList.toggle('sel',x===b));gsap.fromTo(b,{scale:.96},{scale:1,duration:.3,ease:'back.out(3)'});react('happy',a);typeIn($('#bb'),LEVELS[S.level][2])});
-  $('#nx').onclick=()=>{SFX.tap();onboard(3)};return}
+  $('#nx').onclick=()=>{SFX.tap();track('ob_level',1);onboard(3)};return}
  if(step===3){obShell(3,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div><div class="opts">${GOALS.map(([g,e,n,d])=>`<button class="opt ${g===S.goal?'sel':''}" data-g="${g}"><span class="oe sm">${e}</span><b style="flex:1">${n}</b><span class="muted" style="white-space:nowrap">${g} XP · ${d.replace(" / day","")}</span></button>`).join('')}</div>`,user?'Let’s go!':'Continue');
   typeIn($('#bb'),'Pick a daily goal. Small steps every day make a big difference!');
   $$('[data-g]').forEach(b=>b.onclick=()=>{SFX.tap();S.goal=+b.dataset.g;$$('[data-g]').forEach(x=>x.classList.toggle('sel',x===b));gsap.fromTo(b,{scale:.96},{scale:1,duration:.3,ease:'back.out(3)'});react('happy',a);const g=GOALS.find(x=>x[0]===S.goal);typeIn($('#bb'),`${g[2]}: that’s ${g[3].replace(' / day','')} a day. You’ve got this, ${S.name}!`)});
-  $('#nx').onclick=()=>{SFX.tap();if(!user)return onboard(4,'up');save();go('learn')}}}
+  $('#nx').onclick=()=>{SFX.tap();track('ob_goal',1);if(!user)return onboard(4,'up');save();go('learn')}}}
 const authErr=e=>({'auth/invalid-credential':'Wrong email or password.','auth/email-already-in-use':'That email already has an account. Try logging in!','auth/weak-password':'Password needs at least 6 characters.','auth/invalid-email':'That email doesn’t look right.','auth/missing-password':'Type a password first.','auth/too-many-requests':'Too many tries. Wait a minute and try again.','auth/popup-blocked':'Allow pop-ups to sign in with Google.','auth/network-request-failed':'Couldn’t reach the sign-in server. Check your internet, or turn off ad-blockers/VPN for this site.','auth/operation-not-allowed':'This sign-in method is turned off. Ask the app owner to enable it in Firebase.','auth/unauthorized-domain':'Sign-in isn’t allowed on this web address yet.'})[e.code]||(e.message||'Something went wrong').replace('Firebase: ','');
 function authStep(mode){const inn=mode==='in';
  const a=obShell(4,`<div class="talk">${chip(120)}<div class="bubble" id="bb"></div></div>
@@ -645,7 +735,7 @@ function bar(){gsap.to('#pb',{width:L.done/L.total*100+'%',duration:.5,ease:'pow
 function next(){bar();$('#lhead').style.visibility='';gsap.set('#sheet',{yPercent:100,visibility:'hidden'});L.locked=false;
  if(!L.queue.length)return finish();
  L.cur=L.queue.shift();renderItem();}
-const talk=(t,s=100)=>`<div class="talk">${chip(s)}<div class="bubble">${t}</div></div>`;
+const talk=(t,s=100)=>`<div class="talk">${chip(s)}<div class="bubble"><button class="spk" data-say aria-label="Read aloud">🔊</button>${t}</div></div>`;
 function renderItem(){const it=L.cur,st=$('#stage'),ck=$('#check');sel=null;
  const pre=L.retry.has(it)?'<div class="tagline bad">↻ Previous mistake</div>':'';let h='';
  ck.textContent='Check';ck.disabled=true;ck.onclick=check;
@@ -655,9 +745,9 @@ function renderItem(){const it=L.cur,st=$('#stage'),ck=$('#check');sel=null;
  if(it.t==='build')h=`${pre}<h2 class="q">Build the answer</h2>${talk(it.q)}<div class="line" id="line"></div><div class="bank" id="bank">${shuf([...it.answer.split(' '),...it.extra]).map((w,i)=>`<button class="chipw" data-i="${i}">${w}</button>`).join('')}</div>`;
  if(it.t==='match'){L.m={l:null,r:null,left:it.pairs.length};h=`${pre}<h2 class="q">Tap the matching pairs</h2><div class="match"><div>${shuf(it.pairs.map((p,i)=>[p[0],i])).map(([t,i])=>`<button class="opt" data-s="l" data-k="${i}">${t}</button>`).join('')}</div><div>${shuf(it.pairs.map((p,i)=>[p[1],i])).map(([t,i])=>`<button class="opt" data-s="r" data-k="${i}">${t}</button>`).join('')}</div></div>`;$('.lfoot').style.visibility='hidden'}
  else $('.lfoot').style.visibility='';
- st.innerHTML=h;st.scrollTop=0;animateChips(st);
+ st.innerHTML=h;st.scrollTop=0;animateChips(st);if(S.tts)say(readItem(it));
  gsap.fromTo(st.children,{x:30,opacity:0},{x:0,opacity:1,duration:.35,stagger:.05,ease:'power2.out'});}
-function onStage(e){const b=e.target.closest('button');if(!b||L.locked)return;const it=L.cur;
+function onStage(e){if(e.target.closest('[data-say]'))return say(readItem(L.cur));const b=e.target.closest('button');if(!b||L.locked)return;const it=L.cur;
  if(it.t==='mc'&&b.classList.contains('opt')){SFX.tap();$$('.opt').forEach(x=>x.classList.toggle('sel',x===b));sel=b.dataset.v;$('#check').disabled=false;gsap.fromTo(b,{scale:.95},{scale:1,duration:.3,ease:'back.out(3)'})}
  if(it.t==='build'){SFX.tap();const line=$('#line');
   if(b.parentNode.id==='bank'&&!b.classList.contains('used')){const c=b.cloneNode(true),r=b.getBoundingClientRect();b.classList.add('used');line.appendChild(c);const r2=c.getBoundingClientRect();gsap.from(c,{x:r.left-r2.left,y:r.top-r2.top,duration:.3,ease:'power3.out'})}
@@ -688,7 +778,7 @@ function quitAsk(){if(!L||L.finished)return closeLesson();const m=document.creat
  m.innerHTML=`<div>${chip(120)}<h2>Wait, don’t go!</h2><p class="muted">You’ll lose your progress in this lesson.</p><button class="btn wide" id="stay">Keep learning</button><button class="btn ghost wide" id="leave" style="color:var(--bad)">End session</button></div>`;
  $('#lesson').appendChild(m);animateChips(m);react('sad',m);gsap.from(m.firstChild,{yPercent:100,duration:.35,ease:'power3.out'});
  $('#stay').onclick=()=>m.remove();$('#leave').onclick=closeLesson}
-function closeLesson(){$('#lesson').hidden=true;$('#lesson').innerHTML='';L=null;go('learn')}
+function closeLesson(){try{speechSynthesis.cancel()}catch{}$('#lesson').hidden=true;$('#lesson').innerHTML='';L=null;go('learn')}
 function noHearts(){regen();L.locked=true;$('#sheet').innerHTML='';$('#lhead').style.visibility='hidden';gsap.set('#sheet',{yPercent:100,visibility:'hidden'});$('.lfoot').style.visibility='';
  $('#stage').innerHTML=`<div class="fin">${chip(160)}<h1 class="bad">You ran out of hearts</h1><p>Next heart in ${nextHeartMin()} min. Refill now, or practice to earn hearts back!</p><button class="btn" id="refill" ${S.coins<50?'disabled':''}>Refill ❤️ for ${COIN} 50</button><button class="btn ghost" id="prac">Practice</button></div>`;
  animateChips($('#stage'));react('sad');const ck=$('#check');ck.disabled=false;ck.textContent='No thanks';ck.onclick=closeLesson;
@@ -696,7 +786,7 @@ function noHearts(){regen();L.locked=true;$('#sheet').innerHTML='';$('#lhead').s
  $('#prac').onclick=()=>Object.keys(S.done).length?startLesson('practice'):($('#prac').textContent='Finish a lesson first')}
 function finish(){L.finished=true;const perfect=L.wrong===0&&!L.matchMiss,repeat=!L.practice&&S.done[L.id],chk=!L.practice&&LESSON[L.id].check;
  const xp=(repeat?5:10+(chk?5:0)+(perfect?5:0))*(boosted()?2:1),coins=5+(perfect?5:0),acc=Math.round(L.right/Math.max(1,L.right+L.wrong)*100),sec=Math.round((Date.now()-L.t0)/1e3);
- S.xp+=xp;S.coins+=coins;S.lessons++;if(perfect)S.perfects++;if(L.practice)S.hearts=Math.min(5,S.hearts+1);
+ S.xp+=xp;S.coins+=coins;S.lessons++;track(L.practice?'practice':'lesson');if(S.lessons===1)track('first_lesson',1);if(perfect)S.perfects++;if(L.practice)S.hearts=Math.min(5,S.hearts+1);
  S.daily=S.daily.day===day()?{day:day(),xp:S.daily.xp+xp}:{day:day(),xp};S.week=S.week.id===wk()?{id:wk(),xp:S.week.xp+xp}:{id:wk(),xp};{const q=Q();q.xp+=xp;q.lessons++;if(perfect)q.perfects++}
  const streakUp=S.lastDay!==day();if(streakUp){S.streak=S.lastDay===day(-1)?S.streak+1:1;S.lastDay=day();S.days=[...new Set([...S.days,day()])].slice(-30);S.best=Math.max(S.best,S.streak)}
  const lc=!L.practice&&LESSON[L.id],jumping=chk&&!repeat&&!COURSE[lc.ch].lessons.every(x=>x.check||S.done[x.id]),jumpFail=jumping&&L.wrong>2;
@@ -728,7 +818,8 @@ window.onAuth=async u=>{if(!u&&!user&&authed)return; // late 'still signed out' 
  flush();authed=true;user=u;syncOK=false;FR=null;
  if(u){let r=null;try{r=await cloud.load(u.uid);syncOK=true}catch(e){console.error(e)}
   if(r)S={...blank(),...Object.fromEntries(Object.keys(DEF).filter(k=>r[k]!==undefined).map(k=>[k,r[k]]))};
-  else if(!S.name)S.name=(u.displayName||'').split(' ')[0];
+  else{if(syncOK)track('signup');if(!S.name)S.name=(u.displayName||'').split(' ')[0]}
+  parentOK=!!r?.parentOK;CLS=CM=null;if(S.classCode)loadClass();
   save()}
  else S=blank();
  go('learn')};
@@ -739,6 +830,8 @@ setTimeout(()=>{if(!authed){authed=true;go('learn')}},6000); // offline fallback
 const V='https://www.gstatic.com/firebasejs/11.0.2/';
 const [{initializeApp},A,F]=await Promise.all(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].map(f=>import(V+f)));
 const app=initializeApp(window.FIREBASE_CONFIG),auth=A.getAuth(app),db=F.getFirestore(app);
+// local testing only: localStorage['chip-emu']='1' points the app at the Firebase emulators
+try{if(localStorage.getItem('chip-emu')){A.connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});F.connectFirestoreEmulator(db,'127.0.0.1',8080)}}catch{}
 window.cloud={
  google:()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()),
  signUp:(e,p)=>A.createUserWithEmailAndPassword(auth,e,p),
@@ -754,7 +847,16 @@ window.cloud={
  claimUsername:(uid,u,old)=>F.runTransaction(db,async t=>{if(u){const r=F.doc(db,'usernames',u),c=await t.get(r);if(c.exists()&&c.data().uid!==uid)throw new Error('taken');if(!c.exists())t.set(r,{uid})}if(old&&old!==u)t.delete(F.doc(db,'usernames',old))}),
  findUser:u=>F.getDoc(F.doc(db,'usernames',u)).then(c=>c.exists()?F.getDoc(F.doc(db,'profiles',c.data().uid)).then(s=>s.exists()?{uid:s.id,...s.data()}:null):null),
  profiles:uids=>Promise.all(uids.map(u=>F.getDoc(F.doc(db,'profiles',u)).then(s=>s.exists()?{uid:u,...s.data()}:null))).then(a=>a.filter(Boolean)),
- followers:uid=>F.getCountFromServer(F.query(F.collection(db,'profiles'),F.where('following','array-contains',uid))).then(s=>s.data().count)};
+ followers:uid=>F.getCountFromServer(F.query(F.collection(db,'profiles'),F.where('following','array-contains',uid))).then(s=>s.data().count),
+ track:id=>F.setDoc(F.doc(db,'metrics',id),{n:F.increment(1)},{merge:true}),
+ getClass:c=>F.getDoc(F.doc(db,'classes',c)).then(s=>s.exists()?{code:c,...s.data()}:null),
+ members:c=>F.getDocs(F.collection(db,'classes',c,'members')).then(q=>q.docs.map(d=>({uid:d.id,...d.data()}))),
+ saveMember:(c,uid,d)=>F.setDoc(F.doc(db,'classes',c,'members',uid),d),
+ leaveClass:(c,uid)=>F.deleteDoc(F.doc(db,'classes',c,'members',uid)),
+ // FCM token lives on the user doc (outside app state) so the streak script can push to every device
+ pushOn:async uid=>{const M=await import(V+'firebase-messaging.js'),t=await M.getToken(M.getMessaging(app),{vapidKey:self.FIREBASE_VAPID_KEY,serviceWorkerRegistration:await navigator.serviceWorker.ready});await F.updateDoc(F.doc(db,'users',uid),{push:F.arrayUnion(t)});return t},
+ pushOff:async(uid,t)=>{const M=await import(V+'firebase-messaging.js');await M.deleteToken(M.getMessaging(app)).catch(()=>{});await F.updateDoc(F.doc(db,'users',uid),{push:F.arrayRemove(t)})}};
+TQ.splice(0).forEach(id=>cloud.track(id).catch(()=>{}));
 A.onAuthStateChanged(auth,u=>window.onAuth(u));
 </script>
 </body>

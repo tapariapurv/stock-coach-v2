@@ -1,0 +1,20 @@
+# Refreshes prices.json for Chip's Fund from Yahoo Finance after each U.S. market close.
+name: Update fund prices
+on:
+  schedule: [{ cron: '30 22 * * 1-5' }]
+  workflow_dispatch:
+  push: { paths: [scripts/update-prices.mjs, .github/workflows/prices.yml] } # refresh right away when the updater changes
+permissions: { contents: write }
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/update-prices.mjs
+      - run: |
+          git diff --quiet prices.json && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update fund prices" && git push
