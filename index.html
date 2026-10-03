@@ -311,15 +311,16 @@ const LESSON=Object.fromEntries(FLAT.map(l=>[l.id,l]));
 /* ---------- state ---------- */
 const KEY='chip-stocks-v1',REGEN=20*60e3;
 const day=(o=0)=>{const d=new Date();d.setDate(d.getDate()+o);return d.toLocaleDateString('en-CA')};
-const DEF={name:'',goal:20,xp:0,coins:60,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],done:{},mastery:{},daily:{day:'',xp:0},owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day(),username:'',bio:'',avatar:'🐂',theme:'light',accent:0,friends:[],freezes:0,boostUntil:0,week:{id:'',xp:0},quests:{day:'',xp:0,lessons:0,perfects:0,claimed:[]}};
+const DEF={name:'',goal:20,xp:0,coins:60,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],done:{},mastery:{},daily:{day:'',xp:0},owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day(),username:'',bio:'',avatar:'🐂',theme:'light',accent:0,social:false,friends:[],freezes:0,boostUntil:0,week:{id:'',xp:0},quests:{day:'',xp:0,lessons:0,perfects:0,claimed:[]}};
 const blank=()=>({...structuredClone(DEF),heartsAt:Date.now(),joined:day()});
 let S;try{S={...blank(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{S=blank()}
 let user=null,syncOK=false,syncT,pending=null;
 // debounced cloud write; the snapshot is bound to its uid so a sign-out/sign-in can never cross accounts
-const flush=()=>{clearTimeout(syncT);if(pending){const[uid,d,pb]=pending;pending=null;cloud.save(uid,d).catch(console.error);cloud.saveProfile(uid,pb).catch(console.error)}};
+const flush=()=>{clearTimeout(syncT);if(pending){const[uid,d,pb]=pending;pending=null;cloud.save(uid,d).catch(console.error);if(pb)cloud.saveProfile(uid,pb).catch(console.error)}};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch{}
  if(user&&syncOK){pending=[user.uid,{...structuredClone(S),email:user.email,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,updatedAt:Date.now()},pub()];clearTimeout(syncT);syncT=setTimeout(flush,800)}};
-const pub=()=>({username:S.username,name:S.name,avatar:S.avatar,bio:S.bio,xp:S.xp,streak:streakNow(),weekId:S.week.id,weekXp:S.week.xp,following:S.friends,updatedAt:Date.now()});
+// public profile is opt-in (parent consent) and carries no real name or bio
+const pub=()=>S.social&&S.username?{username:S.username,avatar:S.avatar,xp:S.xp,streak:streakNow(),weekId:S.week.id,weekXp:S.week.xp,following:S.friends.slice(0,200),updatedAt:Date.now()}:null;
 addEventListener('pagehide',flush);
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>`&#${c.charCodeAt(0)};`);
@@ -425,10 +426,12 @@ function claim(k){const q=Q(),x=QUESTS.find(z=>z[0]===k);if(!x||q.claimed.includ
 let FR=null; // cached friend profiles for this session
 function league(){if(!user)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Sign in to add friends</h2><p class="muted">Follow friends and race them on the weekly leaderboard.</p></div></div>`;
  if(!S.username)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Pick a username first</h2><p class="muted">Friends find you by username.</p><button class="btn" id="setU" style="margin-top:10px">Edit profile</button></div></div>`;
- const me={uid:user.uid,...pub(),me:1},rows=[me,...(FR||[]).filter(f=>f.uid!==user.uid)].map(f=>({...f,w:f.weekId===wk()?f.weekXp:0})).sort((a,b)=>b.w-a.w);
+ if(!S.social)return `<div class="pagehead"><h1>Leagues</h1></div><div class="hero">${chip(110)}<div><h2>Ask a grown-up first</h2><p class="muted">Turning on friends shares your username, avatar, XP and streak with other signed-in learners. Your real name and bio stay private.</p>
+  <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="pok"> A parent or guardian says it’s OK</label><button class="btn" id="son" disabled>Turn on friends</button></div></div>`;
+ const me={uid:user.uid,...pub(),me:1},rows=[me,...new Map((FR||[]).filter(f=>S.friends.includes(f.uid)).map(f=>[f.uid,f])).values()].map(f=>({...f,w:f.weekId===wk()?f.weekXp:0})).sort((a,b)=>b.w-a.w);
  return `<div class="pagehead"><div><h1>Weekly League</h1><p class="muted">Ranked by XP this week · you are @${esc(S.username)}</p></div></div>
  <div class="card"><h3>Add friends</h3><div class="srow"><input class="name" id="fq" placeholder="Search username" autocomplete="off"><button class="btn" id="fgo">Follow</button></div><p class="err" id="ferr"></p></div>
- <div class="list" style="margin-top:16px">${FR?rows.map((f,i)=>`<div class="fr ${f.me?'me':''}"><b class="rk">${['🥇','🥈','🥉'][i]||i+1}</b><span class="fa">${esc(f.avatar||'🐂')}</span><div><b>${esc(f.name||f.username)}</b><br><small class="muted">@${esc(f.username)} · 🔥 ${f.streak||0}</small></div><b>${f.w} XP</b>${f.me?'':`<button class="btn ghost" data-unf="${f.uid}">Unfollow</button>`}</div>`).join(''):'<p class="muted" style="padding:16px 0">Loading friends…</p>'}</div>
+ <div class="list" style="margin-top:16px">${FR?rows.map((f,i)=>`<div class="fr ${f.me?'me':''}"><b class="rk">${['🥇','🥈','🥉'][i]||i+1}</b><span class="fa">${esc(f.avatar||'🐂')}</span><div><b>@${esc(f.username)}</b><br><small class="muted">🔥 ${f.streak||0}</small></div><b>${f.w} XP</b>${f.me?'':`<button class="btn ghost" data-unf="${f.uid}">Unfollow</button>`}</div>`).join(''):'<p class="muted" style="padding:16px 0">Loading friends…</p>'}</div>
  <p class="muted" style="margin-top:12px">${S.friends.length} following · <span id="fols">… followers</span></p>`}
 async function loadFriends(){try{FR=await cloud.profiles(S.friends)}catch(e){console.error(e);FR=[]}if(tab==='league')go()}
 
@@ -454,7 +457,7 @@ const bind={learn(){$$('.node').forEach(n=>n.onclick=e=>{e.stopPropagation();SFX
   n.parentNode.appendChild(p);gsap.from(p,{scale:.7,opacity:0,y:-10,duration:.35,ease:'back.out(2)'});
   if(st!=='lock')p.querySelector('.btn').onclick=()=>startLesson(l.id)});
  document.onclick=()=>$$('.pop').forEach(p=>p.remove())},
- league(){$('#setU')&&($('#setU').onclick=editProfile);if(!user||!S.username)return;if(!FR)loadFriends();
+ league(){$('#setU')&&($('#setU').onclick=editProfile);if($('#son')){$('#pok').onchange=e=>$('#son').disabled=!e.target.checked;$('#son').onclick=()=>{S.social=true;save();go()}}if(!user||!S.username||!S.social)return;if(!FR)loadFriends();
   cloud.followers(user.uid).then(n=>{const e=$('#fols');if(e)e.textContent=n+' followers'}).catch(()=>{});
   const fq=$('#fq'),err=$('#ferr');fq.onkeydown=e=>e.key==='Enter'&&$('#fgo').click();
   $('#fgo').onclick=async()=>{const u=fq.value.trim().toLowerCase().replace(/^@/,'');if(!u)return;err.textContent='';
@@ -464,8 +467,8 @@ const bind={learn(){$$('.node').forEach(n=>n.onclick=e=>{e.stopPropagation();SFX
  quests(){$$('[data-claim]').forEach(b=>b.onclick=()=>claim(b.dataset.claim))},
  practice(){$('#goP')&&($('#goP').onclick=()=>startLesson('practice'))},
  shop(){$$('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy))},
- profile(){$('#snd').onclick=()=>{S.sound=!S.sound;save();go()};$('#so').onclick=()=>window.cloud?.signOut();$('#emo').onclick=()=>{S.emailOptIn=!S.emailOptIn;save();go()};$('#edp').onclick=editProfile;$('#thm').onclick=()=>{const t=['light','dark','auto'];S.theme=t[(t.indexOf(S.theme)+1)%3];save();go()};$$('[data-acc]').forEach(b=>b.onclick=()=>{S.accent=+b.dataset.acc;save();go()});$('#gl').onclick=()=>{const g=[10,20,30,50];S.goal=g[(g.indexOf(S.goal)+1)%4];save();go()};
-  $('#rst').onclick=e=>{if(e.target.dataset.ok){S={...blank(),name:S.name,goal:S.goal,joined:S.joined,emailOptIn:S.emailOptIn,heartsAt:Date.now()};save();go()}else{e.target.dataset.ok=1;e.target.textContent='Tap again to erase everything'}}}};
+ profile(){$('#snd').onclick=()=>{S.sound=!S.sound;save();go()};$('#so').onclick=()=>window.cloud?.signOut();$('#emo').onclick=()=>{S.emailOptIn=!S.emailOptIn;save();go()};$('#edp').onclick=editProfile;$('#soc')&&($('#soc').onclick=()=>{if(!S.social)return go('league');S.social=false;FR=null;save();cloud.deleteProfile(user.uid).catch(console.error);go()});$('#thm').onclick=()=>{const t=['light','dark','auto'];S.theme=t[(t.indexOf(S.theme)+1)%3];save();go()};$$('[data-acc]').forEach(b=>b.onclick=()=>{S.accent=+b.dataset.acc;save();go()});$('#gl').onclick=()=>{const g=[10,20,30,50];S.goal=g[(g.indexOf(S.goal)+1)%4];save();go()};
+  $('#rst').onclick=e=>{if(e.target.dataset.ok){S={...blank(),name:S.name,username:S.username,avatar:S.avatar,bio:S.bio,social:S.social,friends:S.friends,theme:S.theme,accent:S.accent,goal:S.goal,joined:S.joined,emailOptIn:S.emailOptIn,heartsAt:Date.now()};save();go()}else{e.target.dataset.ok=1;e.target.textContent='Tap again to erase everything'}}}};
 
 /* practice */
 function practice(){const n=Object.keys(S.done).length,w=weakTags().slice(0,3);return `<div class="pagehead"><div><h1>Practice Hub</h1><p class="muted">Personalized review · no hearts lost · +1 ❤️</p></div></div>
@@ -504,6 +507,7 @@ function profile(){const c1=COURSE[0].lessons.filter(l=>S.done[l.id]).length;
  <div class="toggle"><b>Daily goal</b><button class="btn ghost" id="gl">${S.goal} XP</button></div>
  <div class="toggle"><b>Theme</b><button class="btn ghost" id="thm">${{light:'☀️ Light',dark:'🌙 Dark',auto:'🌓 Auto'}[S.theme]}</button></div>
  <div class="toggle"><b>Accent color</b><div class="accs">${ACCENTS.map((a,i)=>`<button data-acc="${i}" class="${S.accent===i?'sel':''}" style="background:${a[0]}" aria-label="Accent ${i+1}"></button>`).join('')}</div></div>
+ ${user&&S.username?`<div class="toggle"><div><b>Friends & leaderboards</b><p class="muted" style="font-size:14px">Shares username, avatar & XP</p></div><button class="btn ghost" id="soc">${S.social?'On 🤝':'Off'}</button></div>`:''}
  <div class="toggle"><b>Streak freezes</b><span>🧊 ${S.freezes} / 2</span></div>
  <div class="toggle"><b>Reset progress</b><button class="btn red" id="rst">Reset</button></div></div>
  <div class="mob" style="margin-top:20px">${skillsCard()}</div>`}
@@ -512,7 +516,7 @@ const AVATARS=['🐂','🐻','🦊','🐼','🦁','🐯','🐸','🐵','🦉','�
 function editProfile(){const m=document.createElement('div');m.className='modal';let av=S.avatar;
  m.innerHTML=`<div><h2>Edit profile</h2><div class="avs">${AVATARS.map(a=>`<button data-av="${a}" class="${a===av?'sel':''}">${a}</button>`).join('')}</div>
  <label>Name<input class="name" id="pn" maxlength="20" value="${esc(S.name)}"></label>
- <label>Username${user?'':' (sign in to use with friends)'}<input class="name" id="pu" maxlength="20" placeholder="e.g. bullrunner" value="${esc(S.username)}" autocomplete="off"></label>
+ <label>Username${user?'':' (sign in to pick one)'}<input class="name" id="pu" maxlength="20" placeholder="e.g. bullrunner" value="${esc(S.username)}" autocomplete="off" ${user?'':'disabled'}></label>
  <label>Bio<textarea class="name" id="pb" maxlength="120" placeholder="Tell friends about you">${esc(S.bio)}</textarea></label>
  <p class="err" id="perr"></p><button class="btn wide" id="psv">Save</button><button class="link" id="pcx">Cancel</button></div>`;
  document.body.appendChild(m);gsap.from(m.firstChild,{yPercent:100,duration:.35,ease:'power3.out'});
@@ -520,7 +524,8 @@ function editProfile(){const m=document.createElement('div');m.className='modal'
  $('#pcx',m).onclick=()=>m.remove();
  $('#psv',m).onclick=async()=>{const n=$('#pn',m).value.trim(),u=$('#pu',m).value.trim().toLowerCase(),err=$('#perr',m);
   if(!n)return err.textContent='Name can’t be empty.';if(u&&!/^[a-z0-9_]{3,20}$/.test(u))return err.textContent='Username: 3–20 letters, numbers or _.';
-  if(u&&u!==S.username&&user){try{const f=await cloud.findUser(u);if(f&&f.uid!==user.uid)return err.textContent='That username is taken.'}catch{return err.textContent='Couldn’t check username right now.'}}
+  if(u!==S.username&&user){try{await cloud.claimUsername(user.uid,u,S.username)}catch(e){return err.textContent=e.message==='taken'?'That username is taken.':'Couldn’t save username right now.'}}
+  if(!u&&S.social&&user){S.social=false;cloud.deleteProfile(user.uid).catch(console.error)}
   Object.assign(S,{name:n,username:u,bio:$('#pb',m).value.trim(),avatar:av});save();m.remove();SFX.coin();go()}}
 
 /* onboarding */
@@ -701,7 +706,10 @@ window.cloud={
  // mergeFields: replace app fields wholesale (so maps can shrink) but keep server-owned fields like `mail`
  save:(uid,d)=>F.setDoc(F.doc(db,'users',uid),d,{mergeFields:Object.keys(d)}),
  saveProfile:(uid,d)=>F.setDoc(F.doc(db,'profiles',uid),d),
- findUser:u=>F.getDocs(F.query(F.collection(db,'profiles'),F.where('username','==',u),F.limit(1))).then(q=>q.empty?null:{uid:q.docs[0].id,...q.docs[0].data()}),
+ deleteProfile:uid=>F.deleteDoc(F.doc(db,'profiles',uid)),
+ // usernames/{name} → {uid}: a transaction makes the claim atomic, the rules make it unforgeable
+ claimUsername:(uid,u,old)=>F.runTransaction(db,async t=>{if(u){const r=F.doc(db,'usernames',u),c=await t.get(r);if(c.exists()&&c.data().uid!==uid)throw new Error('taken');if(!c.exists())t.set(r,{uid})}if(old&&old!==u)t.delete(F.doc(db,'usernames',old))}),
+ findUser:u=>F.getDoc(F.doc(db,'usernames',u)).then(c=>c.exists()?F.getDoc(F.doc(db,'profiles',c.data().uid)).then(s=>s.exists()?{uid:s.id,...s.data()}:null):null),
  profiles:uids=>Promise.all(uids.map(u=>F.getDoc(F.doc(db,'profiles',u)).then(s=>s.exists()?{uid:u,...s.data()}:null))).then(a=>a.filter(Boolean)),
  followers:uid=>F.getCountFromServer(F.query(F.collection(db,'profiles'),F.where('following','array-contains',uid))).then(s=>s.data().count)};
 A.onAuthStateChanged(auth,u=>window.onAuth(u));
