@@ -1,8 +1,9 @@
-# Refreshes prices.json for Chip's Fund after each U.S. market close. Run it once by hand after merging.
+# Refreshes prices.json for Chip's Fund from Yahoo Finance after each U.S. market close.
 name: Update fund prices
 on:
   schedule: [{ cron: '30 22 * * 1-5' }]
   workflow_dispatch:
+  push: { paths: [scripts/update-prices.mjs, .github/workflows/prices.yml] } # refresh right away when the updater changes
 permissions: { contents: write }
 jobs:
   prices:
