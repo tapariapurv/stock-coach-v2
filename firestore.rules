@@ -5,5 +5,22 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+    // Username claims: one doc per name, so two learners can never hold the same one.
+    match /usernames/{name} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid']) && name.matches('^[a-z0-9_]{3,20}$');
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+    // Opt-in public profile: no real name or bio, and only under a username you have claimed.
+    match /profiles/{uid} {
+      allow read: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['username','avatar','xp','streak','weekId','weekXp','following','updatedAt'])
+        && request.resource.data.username is string
+        && get(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid
+        && request.resource.data.following is list && request.resource.data.following.size() <= 200;
+    }
   }
 }
