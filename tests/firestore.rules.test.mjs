@@ -1,0 +1,21 @@
+// Firestore rules tests. Run: npx firebase emulators:exec --only firestore "node tests/firestore.rules.test.mjs"
+import {initializeTestEnvironment,assertSucceeds as ok,assertFails as no} from '@firebase/rules-unit-testing';
+import {doc,setDoc,getDoc,deleteDoc} from 'firebase/firestore';import fs from 'fs';
+const env=await initializeTestEnvironment({projectId:'chip-test',firestore:{rules:fs.readFileSync(new URL('../firestore.rules',import.meta.url),'utf8')}});
+const a=env.authenticatedContext('alice').firestore(),b=env.authenticatedContext('bob').firestore(),anon=env.unauthenticatedContext().firestore();
+const prof=u=>({username:u,avatar:'🐂',xp:1,streak:0,weekId:'x',weekXp:0,following:[],updatedAt:1});
+const t=async(n,p)=>{try{await p;console.log('PASS',n)}catch(e){console.log('FAIL',n,e.message);process.exitCode=1}};
+await t('alice claims name',ok(setDoc(doc(a,'usernames/alice_1'),{uid:'alice'})));
+await t('bob cannot steal claimed name',no(setDoc(doc(b,'usernames/alice_1'),{uid:'bob'})));
+await t('bob cannot claim for alice',no(setDoc(doc(b,'usernames/bobby'),{uid:'alice'})));
+await t('bad name rejected',no(setDoc(doc(b,'usernames/BAD NAME'),{uid:'bob'})));
+await t('alice writes profile',ok(setDoc(doc(a,'profiles/alice'),prof('alice_1'))));
+await t('bob cannot profile under alice name',no(setDoc(doc(b,'profiles/bob'),prof('alice_1'))));
+await t('profile with real name rejected',no(setDoc(doc(a,'profiles/alice'),{...prof('alice_1'),name:'Alice'})));
+await t('bob reads alice profile',ok(getDoc(doc(b,'profiles/alice'))));
+await t('anon cannot read profile',no(getDoc(doc(anon,'profiles/alice'))));
+await t('bob cannot read alice private doc',no(getDoc(doc(b,'users/alice'))));
+await t('bob cannot delete alice claim',no(deleteDoc(doc(b,'usernames/alice_1'))));
+await t('alice releases claim',ok(deleteDoc(doc(a,'usernames/alice_1'))));
+await t('alice deletes profile',ok(deleteDoc(doc(a,'profiles/alice'))));
+await env.cleanup();
