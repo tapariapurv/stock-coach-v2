@@ -73,7 +73,18 @@ To add a chapter, add a `ch(...)` entry to `chapters.js`. Every `tag` must exist
 ## Deploy
 
 - **App:** a static site, hosted on Vercel. `firebase.json` also supports Firebase Hosting (`firebase deploy --only hosting`).
-- **Firestore rules:** deploy automatically through the GitHub Action. One-time setup: add a repo secret `FIREBASE_SERVICE_ACCOUNT` holding a service-account JSON key for project `chip-stocks` with the *Firebase Rules Admin* role. To deploy by hand: `firebase deploy --only firestore:rules`.
+- **Firestore rules:** deploy automatically through the GitHub Action, keylessly (no secrets). One-time setup in Google Cloud Shell for project `chip-stocks`:
+  ```sh
+  SA=firebase-rules-deployer@chip-stocks.iam.gserviceaccount.com
+  gcloud config set project chip-stocks
+  gcloud services enable iamcredentials.googleapis.com sts.googleapis.com firebaserules.googleapis.com
+  gcloud iam service-accounts create firebase-rules-deployer --display-name="GitHub rules deploy"
+  for r in firebaserules.admin serviceusage.serviceUsageConsumer firebase.viewer; do gcloud projects add-iam-policy-binding chip-stocks --member=serviceAccount:$SA --role=roles/$r --condition=None -q; done
+  gcloud iam workload-identity-pools create github --location=global --display-name=GitHub
+  gcloud iam workload-identity-pools providers create-oidc github --location=global --workload-identity-pool=github --issuer-uri=https://token.actions.githubusercontent.com --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository --attribute-condition="assertion.repository=='tapariapurv/stock-coach-v2'"
+  gcloud iam service-accounts add-iam-policy-binding $SA --role=roles/iam.workloadIdentityUser --member=principalSet://iam.googleapis.com/projects/147169736788/locations/global/workloadIdentityPools/github/attribute.repository/tapariapurv/stock-coach-v2
+  ```
+  Then run the *Deploy Firestore rules* action once to confirm. To deploy by hand instead: `firebase deploy --only firestore:rules`.
 - **Fund prices:** run the *Update fund prices* action once by hand after merging (Actions tab → Run workflow). Until then the fund shows clearly labelled sample prices.
 - **Push reminders (optional):** Firebase console → Project settings → Cloud Messaging → Web Push certificates → *Generate key pair*, then paste the public key into `FIREBASE_VAPID_KEY` in `firebase-config.js`. Leave it empty to hide the setting. On iPhone, push works only after the app is added to the home screen.
 - **Admin analytics:** in Firestore, create a document `admins/{your uid}` (any content). Your uid is under Authentication → Users. The dashboard then shows an Analytics tab.
