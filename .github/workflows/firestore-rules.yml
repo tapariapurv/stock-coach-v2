@@ -24,6 +24,7 @@ jobs:
       - name: Publish rules
         env: { TOKEN: '${{ steps.auth.outputs.access_token }}' }
         run: |
+          set -o pipefail
           API=https://firebaserules.googleapis.com/v1/projects/chip-stocks
           H=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
           RULESET=$(jq -Rs '{source:{files:[{name:"firestore.rules",content:.}]}}' firestore.rules | curl -sS --fail-with-body "${H[@]}" -d @- "$API/rulesets" | jq -r .name)
