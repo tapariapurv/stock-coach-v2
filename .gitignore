@@ -12,3 +12,6 @@
 
 # Vercel CLI link
 .vercel/
+
+# Dependencies (rules tests)
+node_modules/
