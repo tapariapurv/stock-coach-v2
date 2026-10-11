@@ -32,13 +32,13 @@ const level=(x=S.xp)=>{let n=1;while(lvlXP(n+1)<=x)n++;return n};
 function levelBar(){const n=level(),a=lvlXP(n),b=lvlXP(n+1);return{n,pct:(S.xp-a)/(b-a)*100,left:b-S.xp}}
 
 /* ---------- friend-visible events ---------- */
-function pushEvent(k,v){S.feed=[{k,v,t:Date.now()},...(S.feed||[]).filter(e=>!(e.k===k&&e.v===v))].slice(0,10)}
+function pushEvent(k,v=0){S.feed=[{k,v,t:Date.now()},...(S.feed||[]).filter(e=>!(e.k===k&&e.v===v))].slice(0,10)}
 const FEEDTXT={back:(n,v)=>[`${n} came back to learn about stocks after ${v>=28?Math.round(v/30)+' month'+(v>=45?'s':''):v+' days'}`,'wave'],
  streak:(n,v)=>[`${n} reached a ${v}-day streak`,'fire'],promo:(n,v)=>[`${n} was promoted to the ${TIERS[v]?.[0]||''} League`,'lg_'+(TIERS[v]?.[0]||'bronze').toLowerCase()],
  top3:(n,v)=>[`${n} finished #${v} in their league`,'trophy'],chapter:(n,v)=>[`${n} finished Chapter ${v+1}: ${COURSE[v]?.title||''}`,'book'],
  badge:(n,v)=>[`${n} earned the ${new Date(v+'-01T00:00').toLocaleDateString('en',{month:'long'})} badge`,'medal'],
  ach:(n,v)=>[`${n} unlocked ${v}`,'starg'],level:(n,v)=>[`${n} reached level ${v}`,'bolt'],join:n=>[`${n} started learning with Chip`,'sparkle'],
- follow:n=>[`${n} started following you`,'userplus']};
+ follow:n=>[`${n} started following you`,'userplus'],follows:(n,v)=>[`${n} and ${v} others started following you`,'userplus']};
 
 /* ---------- daily quests ---------- */
 // [icon, label, target(), gems, available()]
@@ -49,22 +49,23 @@ const QPOOL={xp:['bolt',n=>`Earn ${n} XP`,()=>Math.max(20,Math.round(S.goal*1.5/
  story:['story',()=>'Finish a story or reading',()=>1,15,()=>storiesOpen().length>0],listen:['headphones',()=>'Finish a listening session',()=>1,15,()=>doneCount()>0],
  speak:['mic',()=>'Finish a speaking session',()=>1,15,()=>doneCount()>0],words:['cards',n=>`Review ${n} words`,()=>8,10,()=>wordsOpen().length>=4]};
 const doneCount=()=>Object.keys(S.done).length;
-function Q(){if(S.quests?.day===day()&&S.quests.list)return S.quests;const r=rng(day()+S.name),keys=Object.keys(QPOOL).filter(k=>k!=='xp'&&(!QPOOL[k][4]||QPOOL[k][4]()));
+// quests are stored as objects, not nested arrays: Firestore rejects arrays inside arrays
+function Q(){if(S.quests?.day===day()&&S.quests.list?.[0]?.k)return S.quests;const r=rng(day()+S.name),keys=Object.keys(QPOOL).filter(k=>k!=='xp'&&(!QPOOL[k][4]||QPOOL[k][4]()));
  const pickd=[];while(pickd.length<2&&keys.length)pickd.push(keys.splice(r()*keys.length|0,1)[0]);
- return S.quests={day:day(),list:['xp',...pickd].map(k=>[k,QPOOL[k][2](r),QPOOL[k][3]]),c:{},claimed:[],chest:0}}
+ return S.quests={day:day(),list:['xp',...pickd].map(k=>({k,n:QPOOL[k][2](r),g:QPOOL[k][3]})),c:{},claimed:[],chest:0}}
 const qv=k=>Q().c[k]||0;
 function qbump(k,n=1){Q().c[k]=(Q().c[k]||0)+n}
 function qmax(k,v){const q=Q();q.c[k]=Math.max(q.c[k]||0,v)}
-const qready=()=>Q().list.filter(([k,n])=>qv(k)>=n&&!Q().claimed.includes(k)).length;
+const qready=()=>Q().list.filter(({k,n})=>qv(k)>=n&&!Q().claimed.includes(k)).length;
 const msLeft=()=>{const d=new Date();d.setHours(24,0,0,0);return d-Date.now()};
 const hLeft=()=>{const m=Math.ceil(msLeft()/6e4);return m>=60?Math.floor(m/60)+' hours':m+' min'};
-function questRows(mini){const q=Q();return q.list.map(([k,n,g])=>{const[icn,lbl]=QPOOL[k],v=Math.min(Math.floor(qv(k)),n),got=q.claimed.includes(k),done=v>=n;
+function questRows(mini){const q=Q();return q.list.map(({k,n,g})=>{const[icn,lbl]=QPOOL[k],v=Math.min(Math.floor(qv(k)),n),got=q.claimed.includes(k),done=v>=n;
  return `<div class="quest ${got?'got':''}">${ic(icn,mini?30:40)}<div><b>${lbl(n)}</b><div class="qbar"><i style="width:${Math.max(6,v/n*100)}%"></i><em>${v} / ${n}</em></div></div>
  ${mini?(got?`<span class="qok">${ic('check',20)}</span>`:ic(done?'chestopen':'chest',30)):got?`<span class="qok">${ic('check',22)}</span>`:`<button class="btn ${done?'gold':'ghost'} sm" data-claim="${k}" ${done?'':'disabled'}>${GEMI()} ${g}</button>`}</div>`}).join('')}
 function questCard(mini){const q=Q(),all=q.claimed.length===q.list.length;return `<div class="card">${mini?`<div class="chead"><h3>Daily Quests</h3><button class="link" data-tab="quests">View all</button></div>`:''}${questRows(mini)}
  ${!mini&&all?`<div class="chestrow">${ic(q.chest?'chestopen':'chest',56)}<div><b>${q.chest?'Chest opened':'All quests done!'}</b><p class="muted">${q.chest?`You found ${q.chest} gems. New quests in ${hLeft()}.`:'Open your bonus chest.'}</p></div>${q.chest?'':'<button class="btn gold sm" id="openChest">Open</button>'}</div>`:''}</div>`}
-function claim(k,btn){const q=Q(),x=q.list.find(z=>z[0]===k);if(!x||q.claimed.includes(k)||qv(k)<x[1])return;q.claimed.push(k);S.gems+=x[2];S.qdone=(S.qdone||0)+1;
- gemFly(btn,x[2]/2);SFX.coin();monthBump();checkAch();save();go()}
+function claim(k,btn){const q=Q(),x=q.list.find(z=>z.k===k);if(!x||q.claimed.includes(k)||qv(k)<x.n)return;q.claimed.push(k);S.gems+=x.g;S.qdone=(S.qdone||0)+1;
+ gemFly(btn,x.g/2);SFX.coin();monthBump();checkAch();save();go()}
 function openChest(btn){const q=Q();if(q.chest||q.claimed.length<q.list.length)return;const g=15+(rng(day()+'chest'+S.name)()*26|0);q.chest=g;S.gems+=g;save();
  const m=modal(`<div class="celeb-art">${ic('chest',120)}</div><h2>Quest chest</h2><p class="muted">For finishing every daily quest.</p><div class="earn" style="opacity:0">+${g} ${GEMI(22)}</div><button class="btn wide" data-close>Collect</button>`);
  const a=$('.celeb-art',m);gsap.timeline().to(a,{rotation:-8,duration:.08,repeat:5,yoyo:true}).add(()=>{a.innerHTML=ic('chestopen',120);SFX.win();confetti()}).from(a,{scale:.6,duration:.5,ease:'back.out(3)'}).to($('.earn',m),{opacity:1,duration:.3});

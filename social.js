@@ -6,19 +6,27 @@ const LSIZE=30,promoN=t=>t<TIERS.length-1?7:0,demoN=t=>t>0?5:0;
 const RIVAL_NAMES=['Penny','Leo','Zara','Milo','Ava','Kai','Nora','Theo','Ivy','Omar','Luna','Finn','Maya','Ravi','Ella','Sam','Hugo','Iris','Jay','Rosa','Ben','Lily','Max','Ana','Noah','Mia','Eli','Zoe','Arlo','Sofia','Tariq','Yuki','Diego','Amara','Felix','Nina'];
 // Practice rivals fill the league until enough real learners join. They're labelled as rivals in the UI.
 // Each rival's week is fixed by a seed, and their XP grows through the week the way a learner's would.
-function rivals(week,tier,n){const r=rng(week+'|'+tier+'|'+(user?.uid||S.joined+S.name)),names=shuf2([...RIVAL_NAMES],r);
+function rivals(week,tier,n,seed){const r=rng(week+'|'+tier+'|'+(seed||user?.uid||S.joined+S.name)),names=shuf2([...RIVAL_NAMES],r);
  return [...Array(Math.max(0,n))].map((_,i)=>{const fin=Math.round((35+tier*28)*(.12+2*r()**1.7)),w=[...Array(7)].map(()=>r()**2+.05),tot=w.reduce((a,b)=>a+b);
   return{bot:1,uid:'bot'+i,username:names[i%names.length],fin,share:w.map(x=>x/tot),avMode:'char',char:{skin:r()*6|0,hair:r()*9|0,hairC:r()*6|0,eyes:r()*3|0,mouth:r()*3|0,acc:r()*3|0,top:r()*2|0,shirt:r()*8|0,bg:r()*7|0},streak:r()*40|0}})}
 const shuf2=(a,r)=>{for(let i=a.length-1;i>0;i--){const j=r()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 function botXp(b,week){const el=week===wk()?Math.max(0,Math.min(7,(Date.now()-new Date(week+'T00:00'))/864e5)):7;let x=0;for(let d=0;d<7;d++)x+=b.fin*b.share[d]*Math.max(0,Math.min(1,el-d));return Math.round(x)}
 let LG=null; // real learners in my league this week: {key, rows, at}
 const realLeague=()=>!!(user&&S.social&&S.username);
-async function loadLeague(){const key=wk()+'|'+S.league.tier;if(!realLeague()||(LG?.key===key&&Date.now()-LG.at<6e4))return;LG={key,rows:LG?.key===key?LG.rows:null,at:Date.now()};
- try{const rows=(await cloud.league(S.league.tier,wk())).filter(p=>p.uid!==user.uid);LG={key,rows,at:Date.now()};S.league.snap=rows.slice(0,LSIZE-1).map(p=>[p.uid,p.weekXp||0]);save()}catch(e){console.error(e);LG={key,rows:[],at:Date.now()}}
+// a league holds 30. When a tier has more learners this week, everyone is dealt into balanced groups by a
+// weekly shuffle of their ids, so every device computes the same groups without a server.
+function leagueGroup(all,uid,week){const ids=[...new Set([...all.map(p=>p.uid),uid])].sort((a,b)=>hashStr(a+week)-hashStr(b+week)||(a<b?-1:1)),g=Math.ceil(ids.length/LSIZE),k=ids.indexOf(uid)%g;
+ return ids.filter((_,i)=>i%g===k)}
+async function loadLeague(){const key=wk()+'|'+S.league.tier;if(!realLeague()||(LG?.key===key&&Date.now()-LG.at<6e4))return;LG={key,rows:LG?.key===key?LG.rows:null,seed:LG?.seed,at:Date.now()};
+ try{const all=await cloud.league(S.league.tier,wk()),grp=leagueGroup(all,user.uid,wk()),rows=all.filter(p=>p.uid!==user.uid&&grp.includes(p.uid));
+  // rivals are seeded by the group, so everyone in a short group races the same rivals
+  // rivals only pad a tier that doesn't have a full league of real learners yet
+  const seed=grp.slice().sort()[0],full=all.filter(p=>p.uid!==user.uid).length+1>=LSIZE;LG={key,rows,seed,full,at:Date.now()};S.league.full=full;S.league.snap=rows.slice(0,LSIZE-1).map(p=>({u:p.uid,x:p.weekXp||0}));S.league.seed=seed;save()}catch(e){console.error(e);LG={key,rows:[],at:Date.now()}}
  if(tab==='league')go()}
 function leagueRows(week=wk(),final){const t=S.league.tier,me={me:1,uid:'me',username:S.username||S.name,...myAv(),xp:week===wk()?weekXP():S.week.id===week?S.week.xp:0,streak:streakNow()};
- const real=final?(S.league.snap||[]).map(([uid,xp])=>({uid,xp})):(LG?.key===week+'|'+t&&LG.rows||[]).map(p=>({...p,xp:p.weekXp||0}));
- const bots=rivals(week,t,LSIZE-1-real.length).map(b=>({...b,xp:botXp(b,week)}));
+ const real=final?(S.league.snap||[]).map(s=>Array.isArray(s)?{uid:s[0],xp:s[1]}:{uid:s.u,xp:s.x}):(LG?.key===week+'|'+t&&LG.rows||[]).map(p=>({...p,xp:p.weekXp||0}));
+ const cur=LG?.key===week+'|'+t,full=final?S.league.full:cur&&LG.full;
+ const bots=rivals(week,t,full?0:LSIZE-1-real.length,final?S.league.seed:LG?.key===week+'|'+t?LG.seed:'').map(b=>({...b,xp:botXp(b,week)}));
  return [me,...real,...bots].sort((a,b)=>b.xp-a.xp||(b.me?1:0)-(a.me?1:0))}
 // once per new week: settle last week's league
 function leagueRollover(){const L=S.league;if(!L.week){L.week=wk();return}if(L.week===wk())return;const old=L.week,myXp=S.week.id===old?S.week.xp:0;
@@ -27,11 +35,11 @@ function leagueRollover(){const L=S.league;if(!L.week){L.week=wk();return}if(L.w
   if(res==='up')pushEvent('promo',L.tier);S.gems+=g;L.last={week:old,rank,res,from:t,to:L.tier};
   celebrate({art:tierIc(L.tier,130),title:res==='up'?`Promoted to ${TIERS[L.tier][0]}!`:res==='down'?`Back to ${TIERS[L.tier][0]}`:`You stayed in ${TIERS[L.tier][0]}`,
    text:`You finished #${rank} in the ${TIERS[t][0]} League last week${res==='down'?'. Earn more XP this week to climb back up!':'.'}`,gems:g,btn:'Continue'})}
- L.week=wk();L.snap=[];LG=null;checkAch?.()}
+ L.week=wk();L.snap=[];L.seed='';L.full=false;LG=null;checkAch?.()}
 function daysLeft(){const d=new Date(wk()+'T00:00');d.setDate(d.getDate()+7);const h=Math.ceil((d-Date.now())/36e5);return h>48?Math.ceil(h/24)+' days':h+' hours'}
 function league(){const t=S.league.tier,rows=leagueRows(),pz=promoN(t),dz=demoN(t),n=rows.length,me=rows.findIndex(r=>r.me);
  const row=(r,i)=>`${i===pz&&pz?'<div class="zone up">'+ic('up',18)+' PROMOTION ZONE '+ic('up',18)+'</div>':''}${i===n-dz&&dz?'<div class="zone dn">'+ic('down',18)+' DEMOTION ZONE '+ic('down',18)+'</div>':''}
-  <button class="fr ${r.me?'me':''} ${i<pz?'pz':i>=n-dz?'dz':''}" ${r.bot||r.me?'':`data-prof="${r.uid}"`}><b class="rk">${i<3?ic('medal',30,'m'+i):i+1}</b>${avatarHTML(r,42)}<div><b>${r.me?'You':'@'+esc(r.username||'learner')}</b>${r.bot?`<small class="muted">${ic('bot',14)} Practice rival</small>`:`<small class="muted">${ic('fire',14)} ${r.streak||0} day streak</small>`}</div><b>${r.xp} XP</b></button>`;
+  <button class="fr ${r.me?'me':''} ${i<pz?'pz':i>=n-dz?'dz':''}" ${r.bot||r.me?'':`data-prof="${r.uid}"`}><b class="rk">${i<3?ic('medal',30,'m'+i):i+1}</b>${avatarHTML(r,42)}<div><b>${r.me?'You':r.bot?esc(r.username):'@'+esc(r.username||'learner')}</b>${r.bot?`<small class="muted">${ic('bot',14)} Practice rival</small>`:`<small class="muted">${ic('fire',14)} ${r.streak||0} day streak</small>`}</div><b>${r.xp} XP</b></button>`;
  return `<div class="lghead"><div class="tiers">${TIERS.map((_,i)=>`<span class="${i===t?'on':i>t?'off':''}">${tierIc(i,i===t?64:38)}</span>`).join('')}</div>
  <h1>${TIERS[t][0]} League</h1><p class="muted">${pz?`Top ${pz} advance to ${TIERS[t+1][0]}`:'The top league. Stay on top!'} · ${ic('clock',16)} ${daysLeft()} left</p></div>
  ${weekXP()?'':`<div class="tip">${ic('bolt',28)}<span>Finish a lesson to climb this week’s leaderboard!</span></div>`}
@@ -61,13 +69,15 @@ async function loadSuggest(){if(!FR||!FOL)return;const mine=new Set([user.uid,..
  const ids=[...score].sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0]),known=[...FOL,...(LG?.rows||[])];
  try{const miss=ids.filter(u=>!known.find(p=>p.uid===u)),got=miss.length?await cloud.profiles(miss):[];SUG=ids.map(u=>known.find(p=>p.uid===u)||got.find(p=>p.uid===u)).filter(Boolean).map(p=>({...p,why:why.get(p.uid)}))}catch(e){console.error(e);SUG=[]}
  if($('.shell')&&tab==='profile')go()}
-function follow(p){if(S.friends.includes(p.uid)||p.uid===user?.uid)return;S.friends=[...S.friends,p.uid];FR=[...(FR||[]),p];SUG=SUG?.filter(x=>x.uid!==p.uid);save();SFX.coin();checkAch()}
+function follow(p){if(!p||p.bot||S.friends.includes(p.uid)||p.uid===user?.uid)return;S.friends=[...S.friends,p.uid];FR=[...(FR||[]),p];SUG=SUG?.filter(x=>x.uid!==p.uid);save();SFX.coin();checkAch()}
 function unfollow(uid){S.friends=S.friends.filter(x=>x!==uid);FR=FR?.filter(f=>f.uid!==uid);save()}
 function suggestCard(){if(!realLeague())return '';if(!SUG)return `<div class="card"><h3>Friend suggestions</h3><p class="muted" style="margin-top:8px">Finding people you may know…</p></div>`;
  return `<div class="card"><div class="chead"><h3>Friend suggestions</h3><button class="link" data-addf>Search</button></div>${SUG.length?`<div class="sugs">${SUG.slice(0,6).map(p=>`<div class="sug">${avatarHTML(p,56)}<b>@${esc(p.username)}</b><small class="muted">${esc(p.why||'')}</small><button class="btn sm" data-fol="${p.uid}">Follow</button></div>`).join('')}</div>`:'<p class="muted" style="margin-top:8px">No suggestions yet. Search for friends by username.</p>'}</div>`}
 const ago=t=>{const s=(Date.now()-t)/1e3;return s<3600?Math.max(1,Math.round(s/60))+'m':s<86400?Math.round(s/3600)+'h':Math.round(s/86400)+'d'};
 function feedItems(){const ev=[];(FR||[]).filter(f=>S.friends.includes(f.uid)).forEach(f=>(f.feed||[]).slice(0,10).forEach(e=>e&&FEEDTXT[e.k]&&ev.push({...e,p:f})));
- (FOL||[]).filter(f=>!S.seenFol.includes(f.uid)).forEach(f=>ev.push({k:'follow',t:f.updatedAt||Date.now(),p:f,isNew:1}));return ev.sort((a,b)=>b.t-a.t).slice(0,20)}
+ const nf=(FOL||[]).filter(f=>!S.seenFol.includes(f.uid)).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+ // a burst of new followers is one line, not twenty
+ if(nf.length>3)ev.push({k:'follows',v:nf.length-1,t:nf[0].updatedAt||Date.now(),p:nf[0],isNew:1});else nf.forEach(f=>ev.push({k:'follow',t:f.updatedAt||Date.now(),p:f,isNew:1}));return ev.sort((a,b)=>b.t-a.t).slice(0,20)}
 function feedCard(){const fr=realLeague(),ev=fr?feedItems():[],mine=(S.feed||[]).filter(e=>FEEDTXT[e.k]).slice(0,5);
  const line=(e,me)=>{const[txt,icn]=FEEDTXT[e.k](me?'You':'@'+esc(e.p.username),e.v);return `<div class="feed ${e.isNew?'new':''}" ${me?'':`data-prof="${e.p.uid}"`}>${me?avatarHTML(myAv(),40):avatarHTML(e.p,40)}<div><p>${txt}</p><small class="muted">${ago(e.t)} ago</small></div>${ic(icn,26)}</div>`};
  return `<div class="card"><div class="chead"><h3>${ic('bell',22)} ${fr?'Friend updates':'Your activity'}</h3></div>${fr?(FR?ev.length?ev.map(e=>line(e)).join(''):'<p class="muted" style="margin-top:8px">When friends hit streaks, get promoted or come back to learn, you’ll see it here.</p>':'<p class="muted" style="margin-top:8px">Loading…</p>')
@@ -140,9 +150,9 @@ function editProfile(){let av={avatar:S.avatar,avMode:S.avMode,char:S.char,photo
   if(!u&&S.social&&user){S.social=false;cloud.deleteProfile(user.uid).catch(console.error)}
   if(av.avMode==='photo'&&!av.photo)av.avMode='emoji';if(av.avMode==='char'&&!av.char)av.avMode='emoji';
   Object.assign(S,{name:n,username:u,bio:$('#pbio',m).value.trim(),...av});save();m.remove();SFX.coin();go()}}
-// square-crop and shrink to 192px so the picture fits comfortably in the profile document
+// square-crop and shrink to 128px so the picture fits comfortably in the profile document
 function readPhoto(file){return new Promise((ok,no)=>{if(!file||!/^image\//.test(file.type))return no(new Error('type'));if(file.size>15e6)return no(new Error('big'));
- const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const s=192,c=document.createElement('canvas'),k=Math.min(im.naturalWidth,im.naturalHeight);c.width=c.height=s;
+ const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const s=128,c=document.createElement('canvas'),k=Math.min(im.naturalWidth,im.naturalHeight);c.width=c.height=s;
   c.getContext('2d').drawImage(im,(im.naturalWidth-k)/2,(im.naturalHeight-k)/2,k,k,0,0,s,s);URL.revokeObjectURL(u);let d=c.toDataURL('image/webp',.8);if(!d.startsWith('data:image/webp'))d=c.toDataURL('image/jpeg',.8);ok(d)};
  im.onerror=()=>{URL.revokeObjectURL(u);no(new Error('bad'))};im.src=u})}
 const BCATS=[['skin','Skin',SKIN.map(()=>['',1])],['hair','Hair',AVP.hair],['hairC','Hair colour',HAIRC.map(h=>['',h[1]])],['eyes','Eyes',AVP.eyes],['mouth','Mouth',AVP.mouth],['top','Top',AVP.top],['shirt','Top colour',SHIRT.map(()=>['',1])],['acc','Extras',AVP.acc],['bg','Background',BGC.map(()=>['',1])]];

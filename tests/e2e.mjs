@@ -77,7 +77,7 @@ const today=()=>new Date().toLocaleDateString('en-CA');
  ok(await pg.evaluate(()=>S.hearts===5&&S.gems===120),'refill costs 80 gems');await playThrough(pg);await pg.click('#check');
  await pg.evaluate(()=>closeLesson());await settle(pg);
  // claim quests
- await pg.evaluate(()=>{const q=Q();q.list.forEach(([k,n])=>q.c[k]=n);go('quests')});await settle(pg);await shot(pg,'07-quests');
+ await pg.evaluate(()=>{const q=Q();q.list.forEach(({k,n})=>q.c[k]=n);go('quests')});await settle(pg);await shot(pg,'07-quests');
  const g0=await pg.evaluate(()=>S.gems);for(let i=0;i<3;i++){await pg.click('[data-claim]:not([disabled])');await pg.waitForTimeout(200)}
  ok(await pg.evaluate(g=>S.gems>g&&Q().claimed.length===3&&MO().n===3,g0),'claiming quests pays gems and counts toward the monthly badge');
  await dismiss(pg);await pg.click('#openChest');await pg.waitForTimeout(900);await shot(pg,'08-chest');await pg.click('.modal [data-close]');ok(await pg.evaluate(()=>Q().chest>0),'chest opens once all quests claimed');
@@ -137,7 +137,7 @@ const today=()=>new Date().toLocaleDateString('en-CA');
  await pg.click('[data-tab="profile"]');await pg.waitForTimeout(300);await pg.click('#edp2');await pg.click('[data-mode="photo"]');
  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAF0lEQVR4nGNk+M+AFTBhF2YYFYYKAwAPUwEPLiH0UgAAAABJRU5ErkJggg==','base64');
  await pg.setInputFiles('#pf',{name:'me.png',mimeType:'image/png',buffer:png});await pg.waitForTimeout(400);await pg.check('#ppub');await shot(pg,'22-photo');await pg.click('#psv');await pg.waitForTimeout(300);
- ok(await pg.evaluate(()=>S.avMode==='photo'&&okPhoto(S.photo)&&S.photo.length<60000&&document.querySelector('.pav img')),'photo upload resized and shown');
+ ok(await pg.evaluate(()=>S.avMode==='photo'&&okPhoto(S.photo)&&S.photo.length<20000&&document.querySelector('.pav img')),'photo upload resized and shown');
  await pg.evaluate(()=>save());await pg.waitForTimeout(900);ok(await pg.evaluate(()=>window.__pub?.avMode==='photo'&&window.__pub.photo.length>100),'public profile carries photo only when opted in');
  await pg.click('#edp2');await pg.click('[data-mode="char"]');await pg.click('#bld');await pg.click('[data-cat="1"]');await pg.click('#bo [data-o="3"]');await shot(pg,'23-builder');
  ok(await pg.evaluate(()=>document.querySelector('#bo [data-o="8"]').disabled),'high-level avatar styles locked');await pg.click('#bsv');await pg.click('#psv');
@@ -161,6 +161,9 @@ for(const vp of [{width:360,height:780},{width:768,height:1000},{width:1440,heig
   return{ms:(performance.now()-t)/300,nodes:document.getElementsByTagName('*').length,tweens:gsap.globalTimeline.getChildren(true,true,true).length,state:JSON.stringify(S).length}});
  let tw=1e9;for(let i=0;i<20&&tw>=40;i++){await pg.waitForTimeout(500);tw=await pg.evaluate(()=>gsap.globalTimeline.getChildren(true,true,true).length)}
  ok(r.ms<60,`tab render ${r.ms.toFixed(1)} ms avg`);ok(tw<40,`animations drain after the burst (${tw} left)`);ok(r.state<200000,`saved state stays small (${r.state} bytes)`);
+ // Firestore rejects arrays nested in arrays; the saved state must never contain one
+ const nested=await pg.evaluate(()=>{const bad=[];const walk=(v,p,inArr)=>{if(v===undefined)bad.push(p+' undefined');else if(Array.isArray(v)){if(inArr)bad.push(p);v.forEach((x,i)=>walk(x,p+'['+i+']',true))}else if(v&&typeof v==='object')Object.entries(v).forEach(([k,x])=>walk(x,p+'.'+k,false))};walk({...structuredClone(S),summary:summary(),pub:pub()},'S',false);return bad});
+ ok(!nested.length,'saved state has no nested arrays or undefined values (Firestore-safe) '+nested.slice(0,3).join(','));
  await pg.evaluate(()=>go('learn'));const lr=await pg.evaluate(()=>{const t=performance.now();for(let i=0;i<20;i++)go('learn');return (performance.now()-t)/20});ok(lr<120,`learn path render ${lr.toFixed(1)} ms`);
  ok(!pg.errors.length,'stress: no errors '+pg.errors.join(' | '));await pg.context().close()}
 

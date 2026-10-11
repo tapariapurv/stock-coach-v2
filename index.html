@@ -553,7 +553,7 @@ const KEY='chip-stocks-v1',REGEN=20*60e3;
 const day=(o=0)=>{const d=new Date();d.setDate(d.getDate()+o);return d.toLocaleDateString('en-CA')};
 const DEF={name:'',goal:20,xp:0,coins:60,gems:150,hearts:5,heartsAt:Date.now(),streak:0,best:0,lastDay:'',days:[],frozen:[],done:{},mastery:{},daily:{day:'',xp:0},hist:{},secs:0,owned:[],wear:[],sound:true,emailOptIn:true,level:0,lessons:0,perfects:0,joined:day(),
  username:'',bio:'',avatar:'🐂',avMode:'emoji',char:null,photo:'',photoPublic:false,theme:'light',accent:0,social:false,parentEmail:'',classCode:'',tts:false,fund:{h:{},n:0},friends:[],seenFol:[],
- freezes:0,amulet:0,lostStreak:null,boostUntil:0,week:{id:'',xp:0},quests:{day:''},qdone:0,monthly:{id:'',n:0},badges:[],ach:{},league:{tier:0,week:'',snap:[],best:0,wins:0,top3:0},
+ freezes:0,amulet:0,lostStreak:null,boostUntil:0,week:{id:'',xp:0},quests:{day:''},qdone:0,monthly:{id:'',n:0},badges:[],ach:{},league:{tier:0,week:'',snap:[],seed:'',full:false,best:0,wins:0,top3:0},
  words:{},stories:{},mistakes:[],feed:[],lastOpen:'',achSeen:0};
 const blank=()=>({...structuredClone(DEF),heartsAt:Date.now(),joined:day()});
 let S;try{S={...blank(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{S=blank()}
@@ -985,7 +985,7 @@ window.cloud={
  profiles:uids=>Promise.all(uids.map(u=>F.getDoc(F.doc(db,'profiles',u)).then(s=>s.exists()?{uid:u,...s.data()}:null))).then(a=>a.filter(Boolean)),
  followersList:uid=>F.getDocs(F.query(F.collection(db,'profiles'),F.where('following','array-contains',uid),F.limit(200))).then(q=>q.docs.map(d=>({uid:d.id,...d.data()}))),
  // two equality filters need no composite index
- league:(tier,week)=>F.getDocs(F.query(F.collection(db,'profiles'),F.where('league','==',tier),F.where('weekId','==',week),F.limit(60))).then(q=>q.docs.map(d=>({uid:d.id,...d.data()}))),
+ league:(tier,week)=>F.getDocs(F.query(F.collection(db,'profiles'),F.where('league','==',tier),F.where('weekId','==',week),F.limit(150))).then(q=>q.docs.map(d=>({uid:d.id,...d.data()}))),
  track:id=>F.setDoc(F.doc(db,'metrics',id),{n:F.increment(1)},{merge:true}),
  getClass:c=>F.getDoc(F.doc(db,'classes',c)).then(s=>s.exists()?{code:c,...s.data()}:null),
  members:c=>F.getDocs(F.collection(db,'classes',c,'members')).then(q=>q.docs.map(d=>({uid:d.id,...d.data()}))),

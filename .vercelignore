@@ -1,0 +1,6 @@
+# Not part of the live app: test tooling, seed data scripts, server-side scripts
+tests/
+scripts/
+apps-script/
+node_modules
+*.log

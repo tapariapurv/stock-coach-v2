@@ -14,8 +14,8 @@ A Duolingo-style app that teaches kids how investing works, one bite-sized lesso
 - **Quests:** three rotating daily quests (from a pool of 11), a bonus chest when all three are done, and a **monthly challenge**: finish 30 quests in a month to earn that month's badge.
 - **Streaks:** freezes (auto-cover missed days), a weekend amulet, and streak repair for 3 days after a streak ends. Milestones at 7, 14, 30, 50, 100… days pay gems.
 - **Levels & achievements:** levels from total XP; 12 tiered achievements (Wildfire, Sage, Scholar, Sharpshooter, Champion, Overachiever, Storyteller, Wordsmith, Investor, Friendly, League climber, Conqueror).
-- **Leagues:** 10 tiers from Bronze to Diamond, 30 per league, top 7 promoted and bottom 5 demoted each Monday, top 3 earn gems. Real learners in your tier fill the board first; **practice rivals** (clearly labelled with a robot badge) fill the rest so the race works from day one. Rivals are seeded, so every device shows the same week.
-- **Profile:** photo upload (cropped and shrunk to 192px in the browser), a **character builder** whose styles unlock as you level up, or an emoji. Following/followers lists, statistics, a weekly XP chart, friend suggestions (people who follow you, friends of friends, league-mates), achievements, monthly badges, and a **friend activity feed** ("@sam came back to learn about stocks after 1 month", streaks, promotions, badges).
+- **Leagues:** 10 tiers from Bronze to Diamond, 30 per league, top 7 promoted and bottom 5 demoted each Monday, top 3 earn gems. When a tier has more than 30 learners in a week, everyone is dealt into balanced groups by a weekly shuffle that every device computes the same way. While a tier has fewer than 30, **practice rivals** (labelled with a robot badge, no @handle, can't be followed) fill the board so the race works from day one; they exist only on the device and are never written to Firestore. Known limit: the league query reads up to 150 learners per tier per week; beyond that, grouping should move to a server function.
+- **Profile:** photo upload (cropped and shrunk to 128px in the browser), a **character builder** whose styles unlock as you level up, or an emoji. Following/followers lists, statistics, a weekly XP chart, friend suggestions (people who follow you, friends of friends, league-mates), achievements, monthly badges, and a **friend activity feed** ("@sam came back to learn about stocks after 1 month", streaks, promotions, badges).
 - **Shop:** heart refill, streak freeze, weekend amulet, streak repair, double XP, and 10 outfits for Chip.
 - **Chip's Fund:** after Chapter 2, kids invest coins (1 coin = $1) in 14 real companies and an S&P 500 fund at daily closing prices, with a nudge when one holding dominates. Includes a "company of the week".
 - **Parents:** a child adds a parent's email. The parent signs in at `/dashboard.html` (email must be verified), sees progress and a conversation starter, approves friends, and gets a weekly email on Sundays.
@@ -85,7 +85,17 @@ To add a chapter, add a `ch(...)` entry to `chapters.js`. Every `tag` must exist
 ## Deploy
 
 - **App:** a static site, hosted on Vercel. `firebase.json` also supports Firebase Hosting (`firebase deploy --only hosting`).
-- **Firestore rules:** deploy automatically through the GitHub Action, keylessly (no secrets). One-time setup in Google Cloud Shell for project `chip-stocks`:
+- **Multi-user (hundreds of test learners):** runs the real app, the real Firebase SDK and the real security rules against the local Auth and Firestore emulators. Two learners sign up through the UI, then `tests/seed.mjs` creates 300 more (set `SEED_N=1000` for more), each written as itself through the rules. It checks league cohorts (balanced groups of at most 30, the same on every device), practice rivals (only in tiers with fewer than 30 learners, labelled, no handle, can't be followed or opened), followers, suggestions, the feed, week rollover, and that **nothing fake leaves the device**: no rival profile, follow, snapshot or summary is ever written to Firestore.
+
+```sh
+npm i --no-save playwright gsap@3.12.5 firebase @firebase/rules-unit-testing firebase-tools
+npx firebase emulators:exec --only auth,firestore --project demo-chip "node tests/social.e2e.mjs"
+npx firebase emulators:exec --only auth,firestore --project demo-chip "node tests/seed.mjs 300"   # seed only
+```
+
+The seeder refuses to run unless it is pointed at a local emulator, and it uses a `demo-` project id, which Firebase never connects to a real project. Test learners have `t_` usernames and `seed_` ids. `.vercelignore` and `firebase.json` keep `tests/` off the live site.
+
+**Firestore rules:** deploy automatically through the GitHub Action, keylessly (no secrets). One-time setup in Google Cloud Shell for project `chip-stocks`:
   ```sh
   SA=firebase-rules-deployer@chip-stocks.iam.gserviceaccount.com
   gcloud config set project chip-stocks
