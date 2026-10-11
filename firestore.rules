@@ -28,10 +28,17 @@ service cloud.firestore {
       allow read: if signedIn();
       allow delete: if signedIn() && request.auth.uid == uid;
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['username','avatar','xp','streak','weekId','weekXp','following','updatedAt'])
+        && request.resource.data.keys().hasOnly(['username','avatar','avMode','char','photo','xp','streak','weekId','weekXp','league','level','feed','following','updatedAt'])
         && request.resource.data.username is string
         && get(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid
-        && request.resource.data.following is list && request.resource.data.following.size() <= 200;
+        && request.resource.data.following is list && request.resource.data.following.size() <= 200
+        // optional v2 fields: league tier, a short activity feed, a built character or a small picture
+        && request.resource.data.get('league', 0) is int && request.resource.data.get('league', 0) >= 0 && request.resource.data.get('league', 0) <= 9
+        && request.resource.data.get('feed', []) is list && request.resource.data.get('feed', []).size() <= 10
+        && request.resource.data.get('avMode', 'emoji') in ['emoji', 'char', 'photo']
+        && (request.resource.data.get('char', null) == null || request.resource.data.get('char', null) is map)
+        && request.resource.data.get('photo', '') is string && request.resource.data.get('photo', '').size() <= 60000
+        && (request.resource.data.get('photo', '') == '' || request.resource.data.get('photo', '').matches('^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$'));
     }
     // Classes: a teacher owns the doc; students join by code and keep one member doc each.
     match /classes/{code} {

@@ -12,6 +12,12 @@ await t('bad name rejected',no(setDoc(doc(b,'usernames/BAD NAME'),{uid:'bob'})))
 await t('alice writes profile',ok(setDoc(doc(a,'profiles/alice'),prof('alice_1'))));
 await t('bob cannot profile under alice name',no(setDoc(doc(b,'profiles/bob'),prof('alice_1'))));
 await t('profile with real name rejected',no(setDoc(doc(a,'profiles/alice'),{...prof('alice_1'),name:'Alice'})));
+await t('v2 profile fields allowed',ok(setDoc(doc(a,'profiles/alice'),{...prof('alice_1'),avMode:'photo',photo:'data:image/webp;base64,AAAA',char:{hair:1},league:3,level:5,feed:[{k:'streak',v:7,t:1}]})));
+await t('photo must be an image data URL',no(setDoc(doc(a,'profiles/alice'),{...prof('alice_1'),photo:'https://evil.example/x.png'})));
+await t('oversized photo rejected',no(setDoc(doc(a,'profiles/alice'),{...prof('alice_1'),photo:'data:image/png;base64,'+'A'.repeat(70000)})));
+await t('league tier bounded',no(setDoc(doc(a,'profiles/alice'),{...prof('alice_1'),league:42})));
+await t('feed capped at 10',no(setDoc(doc(a,'profiles/alice'),{...prof('alice_1'),feed:Array(11).fill({k:'x'})})));
+await t('league query works',ok(getDocs(query(collection(b,'profiles'),where('league','==',3),where('weekId','==','x')))));
 await t('bob reads alice profile',ok(getDoc(doc(b,'profiles/alice'))));
 await t('anon cannot read profile',no(getDoc(doc(anon,'profiles/alice'))));
 await t('bob cannot read alice private doc',no(getDoc(doc(b,'users/alice'))));
